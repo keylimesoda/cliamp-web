@@ -63,6 +63,8 @@ export interface ResolvedSource {
   seekable?: boolean;
   /** Extra request headers (same-origin only; cross-origin ignored). */
   headers?: Record<string, string>;
+  /** Play on a standalone media element, bypassing Web Audio/CORS processing. */
+  direct?: boolean;
 }
 
 export type PlaybackState = "stopped" | "playing" | "paused" | "buffering" | "seeking";
