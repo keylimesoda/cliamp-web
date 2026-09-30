@@ -308,6 +308,23 @@ button.btn-primary {
   border-color: var(--border-accent);
 }
 
+/* Source/browser screens keep chrome fixed while only the result list scrolls. */
+.source-browser {
+  overflow: hidden;
+}
+.scroll-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.scroll-panel > .list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ---- list (playlist / catalog rows) ---- */
 .list {
   display: flex;
@@ -317,6 +334,7 @@ button.btn-primary {
 }
 .row {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--gap-sm);
   min-height: var(--tap-min);
@@ -341,8 +359,9 @@ button.btn-primary {
   font-weight: 700;
 }
 .row .marker {
-  width: 1.4em;
-  min-height: 1.4em;
+  width: 2.2em;
+  min-height: 2.2em;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;

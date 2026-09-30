@@ -142,7 +142,7 @@ export default function RadioBrowser() {
       : [];
 
   return (
-    <div className="app">
+    <div className="app source-browser">
       <div className="app-titlebar">
         <button onClick={back} style={{ padding: 0 }} aria-label="Back" disabled={view.kind === "home"}>
           ◀
@@ -189,8 +189,8 @@ export default function RadioBrowser() {
               />
             </div>
           </div>
-          <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0, display: "flex" }}>
-            <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+          <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+            <div className="list">
               {(builtins.data ?? []).map((t) => (
                 <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
                   <span className="marker" aria-hidden>♫</span>
@@ -206,8 +206,8 @@ export default function RadioBrowser() {
       )}
 
       {view.kind === "countries" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {countries.busy ? <Row label="loading countries…" /> : null}
             {orderedCountries.map((c) => (
               <div
@@ -240,8 +240,8 @@ export default function RadioBrowser() {
       )}
 
       {view.kind === "tags" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {tags.busy ? <Row label="loading tags…" /> : null}
             {(tags.data ?? []).slice(0, 300).map((t) => (
               <div className="row" key={t.name} onClick={() => setView({ kind: "tag", name: t.name })} role="button" aria-label={t.name}>
@@ -255,8 +255,8 @@ export default function RadioBrowser() {
       )}
 
       {(view.kind === "country" || view.kind === "tag" || view.kind === "search") && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {stationBusy ? <Row label="loading stations…" /> : null}
             {stationList.map((t) => (
               <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
