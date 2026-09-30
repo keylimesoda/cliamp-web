@@ -19,12 +19,12 @@ import { applyTheme } from "./themes/engine";
 type Screen = "now" | "radio" | "podcast" | "servers" | "local" | "plugins";
 
 const NAV = [
-  { id: "now" as const, label: "♫ Now Playing" },
-  { id: "radio" as const, label: "📡 Radio" },
-  { id: "podcast" as const, label: "🎙 Podcasts" },
-  { id: "servers" as const, label: "🗄 Servers" },
-  { id: "local" as const, label: "◷ Local" },
-  { id: "plugins" as const, label: "⚙ Plugins" },
+  { id: "now" as const, label: "♫ Now Playing", compactLabel: "♫ Now" },
+  { id: "radio" as const, label: "📡 Radio", compactLabel: "📡 Radio" },
+  { id: "podcast" as const, label: "🎙 Podcasts", compactLabel: "🎙 Pods" },
+  { id: "servers" as const, label: "🗄 Servers", compactLabel: "🗄 Servers" },
+  { id: "local" as const, label: "◷ Local", compactLabel: "◷ Local" },
+  { id: "plugins" as const, label: "⚙ Plugins", compactLabel: "⚙ Plugins" },
 ];
 
 function renderScreen(screen: Screen) {
@@ -73,28 +73,16 @@ export default function App() {
   return (
     <>
       {renderScreen(screen)}
-      <nav
-        style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          display: "flex",
-          gap: "var(--gap)",
-          padding: "var(--gap)",
-          background: "var(--bg-sunken)",
-          borderTop: "1px solid var(--border)",
-          zIndex: 10,
-        }}
-      >
+      <nav className="app-nav" aria-label="Primary">
         {NAV.map((n) => (
           <button
             key={n.id}
             className={screen === n.id ? "btn-accent" : ""}
             onClick={() => setScreen(n.id)}
-            style={{ flex: 1 }}
+            aria-current={screen === n.id ? "page" : undefined}
           >
-            {n.label}
+            <span className="nav-label nav-label-full">{n.label}</span>
+            <span className="nav-label nav-label-compact">{n.compactLabel}</span>
           </button>
         ))}
       </nav>

@@ -46,6 +46,7 @@ export default function NowPlaying() {
   const favorites = useFavoritesStore();
   const [scrubPos, setScrubPos] = useState<number | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const pluginStatus = usePluginStore((s) => s.status);
   const playing =
     s.state === "playing" || s.state === "buffering" || s.state === "seeking";
@@ -111,49 +112,80 @@ export default function NowPlaying() {
         </div>
 
         <div className="mix">
-          <div className="eq-bands">
-            {EQ_BANDS_HZ.map((hz, i) => (
-              <div className="eq-band" key={hz} title={`${hz} Hz`}>
-                <span className="hz">{hz >= 1000 ? `${hz / 1000}k` : hz}</span>
-                <span className="db">
-                  {s.eqGains[i] > 0 ? "+" + s.eqGains[i] : s.eqGains[i]}
-                </span>
-              </div>
-            ))}
+          <div
+            id="advanced-controls"
+            className={"advanced-controls" + (showAdvanced ? " is-open" : "")}
+          >
+            <div className="advanced-header">
+              <span>Playback options</span>
+              <button
+                className="advanced-close"
+                onClick={() => setShowAdvanced(false)}
+                aria-label="Close playback options"
+              >
+                Close
+              </button>
+            </div>
+            <div className="eq-bands">
+              {EQ_BANDS_HZ.map((hz, i) => (
+                <div className="eq-band" key={hz} title={`${hz} Hz`}>
+                  <span className="hz">{hz >= 1000 ? `${hz / 1000}k` : hz}</span>
+                  <span className="db">
+                    {s.eqGains[i] > 0 ? "+" + s.eqGains[i] : s.eqGains[i]}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="help-row">
+              <span className="key-pill" onClick={() => s.cyclePreset()} role="button">
+                EQ {s.eqPreset}
+              </span>
+              <span className="key-pill" onClick={() => s.setMono(!s.mono)} role="button">
+                {s.mono ? "Mono" : "Stereo"}
+              </span>
+              <span className="key-pill" onClick={() => s.toggleShuffle()} role="button">
+                Shuffle {s.shuffle === "on" ? "On" : "Off"}
+              </span>
+              <span className="key-pill" onClick={() => s.cycleRepeat()} role="button">
+                Repeat {s.repeat === "off" ? "Off" : s.repeat === "all" ? "All" : "One"}
+              </span>
+              <span
+                className="key-pill"
+                role="button"
+                onClick={() => {
+                  const i = THEME_NAMES.indexOf(s.theme);
+                  s.setTheme(THEME_NAMES[(i + 1) % THEME_NAMES.length]);
+                }}
+              >
+                Theme {s.theme}
+              </span>
+              <span className="key-pill" onClick={() => setShowLyrics((v) => !v)} role="button">
+                Lyrics {showLyrics ? "On" : "Off"}
+              </span>
+            </div>
           </div>
-          <div className="help-row">
-            <span className="key-pill" onClick={() => s.cyclePreset()} role="button">
-              EQ {s.eqPreset}
-            </span>
-            <span className="key-pill" onClick={() => s.setMono(!s.mono)} role="button">
-              {s.mono ? "Mono" : "Stereo"}
-            </span>
-            <span className="key-pill" onClick={() => s.toggleShuffle()} role="button">
-              Shuffle {s.shuffle === "on" ? "On" : "Off"}
-            </span>
-            <span className="key-pill" onClick={() => s.cycleRepeat()} role="button">
-              Repeat {s.repeat === "off" ? "Off" : s.repeat === "all" ? "All" : "One"}
-            </span>
-            <span
-              className="key-pill"
-              role="button"
-              onClick={() => {
-                const i = THEME_NAMES.indexOf(s.theme);
-                s.setTheme(THEME_NAMES[(i + 1) % THEME_NAMES.length]);
-              }}
+
+          <div className="mix-primary">
+            <button
+              className="compact-more-toggle"
+              onClick={() => setShowAdvanced(true)}
+              aria-expanded={showAdvanced}
+              aria-controls="advanced-controls"
             >
-              Theme {s.theme}
-            </span>
-            <span className="key-pill" onClick={() => setShowLyrics((v) => !v)} role="button">
-              Lyrics {showLyrics ? "On" : "Off"}
-            </span>
+              ⋯ More
+            </button>
+            <div className="volume-control">
+              <span className="volume-label">VOL</span>
+              <DragMeter
+                className="meter-green"
+                value={volRatio}
+                onRatio={(r) =>
+                  s.setVolume(VOLUME_MIN_DB + r * (VOLUME_MAX_DB - VOLUME_MIN_DB))
+                }
+                label="Volume"
+              />
+            </div>
           </div>
-          <DragMeter
-            className="meter-green"
-            value={volRatio}
-            onRatio={(r) => s.setVolume(VOLUME_MIN_DB + r * (VOLUME_MAX_DB - VOLUME_MIN_DB))}
-            label="Volume"
-          />
         </div>
       </section>
 
