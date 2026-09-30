@@ -1,3 +1,27 @@
+@font-face {
+  font-family: "CLIAMP JetBrains Mono";
+  src: url("https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/webfonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "CLIAMP JetBrains Mono";
+  src: url("https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/webfonts/JetBrainsMono-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "CLIAMP Nerd Symbols";
+  src: url("https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts@v3.5.1/patched-fonts/NerdFontsSymbolsOnly/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
 /*
  * cliamp-web design system — retro terminal (phosphor / Winamp) aesthetic.
  *
@@ -54,8 +78,10 @@
   --spectrum-high: var(--red);
 
   /* ---- typography ---- */
-  --font-mono: "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", Menlo,
-    Consolas, monospace;
+  --font-mono: "CLIAMP JetBrains Mono", "JetBrains Mono", "Fira Code",
+    "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --font-symbols: "CLIAMP Nerd Symbols", "Symbols Nerd Font Mono",
+    "CLIAMP JetBrains Mono", monospace;
   --fs-xs: clamp(0.72rem, 0.66rem + 0.2vw, 0.85rem);
   --fs-sm: clamp(0.85rem, 0.78rem + 0.25vw, 1rem);
   --fs-md: clamp(1rem, 0.92rem + 0.3vw, 1.2rem);
@@ -166,6 +192,24 @@ body::before {
 }
 .warn {
   color: var(--warn);
+}
+
+/* glyphs: Nerd Font symbols stay fixed-width and separate from text metrics */
+.nf-icon {
+  font-family: var(--font-symbols);
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  speak: none;
+}
+
+.nav-icon {
+  display: inline-block;
+  margin-right: 0.35em;
+}
+
+.transport-icon {
+  font-size: 1.35em;
 }
 
 /* ---- buttons ---- */
@@ -655,7 +699,7 @@ button.btn-primary {
 
   .mix-primary {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
   }
