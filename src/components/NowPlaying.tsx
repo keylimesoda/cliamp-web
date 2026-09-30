@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePlayerStore } from "../store/player";
 import { EQ_BANDS_HZ } from "../core/eq";
 import { VOLUME_MAX_DB, VOLUME_MIN_DB } from "../core/audio/engine";
 import { THEME_NAMES } from "../themes/engine";
 import { useFavoritesStore } from "../store/favorites";
 import { usePluginStore } from "../store/plugins";
-import { useVizStore } from "../store/viz";
 import DragMeter from "./DragMeter";
 import Visualizer from "./Visualizer";
 import LyricsOverlay from "./LyricsOverlay";
@@ -68,7 +67,6 @@ export default function NowPlaying({ immersive = false, onImmersiveChange }: Now
   const [scrubPos, setScrubPos] = useState<number | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showImmersiveKeys, setShowImmersiveKeys] = useState(false);
   const [hideImmersiveTitle, setHideImmersiveTitle] = useState(false);
   const pluginStatus = usePluginStore((s) => s.status);
   const playing =
@@ -78,87 +76,6 @@ export default function NowPlaying({ immersive = false, onImmersiveChange }: Now
   const shownPos = scrubPos ?? s.position;
   const seekRatio = s.duration > 0 ? shownPos / s.duration : 0;
   const volRatio = (s.volumeDb - VOLUME_MIN_DB) / (VOLUME_MAX_DB - VOLUME_MIN_DB);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-
-      if (e.key === "V") {
-        e.preventDefault();
-        onImmersiveChange?.(!immersive);
-        setShowImmersiveKeys(false);
-        return;
-      }
-
-      if (e.key === "v") {
-        e.preventDefault();
-        useVizStore.getState().cycle();
-        return;
-      }
-
-      if (!immersive) return;
-      const player = usePlayerStore.getState();
-
-      switch (e.key) {
-        case "Escape":
-        case "Backspace":
-        case "b":
-          e.preventDefault();
-          onImmersiveChange?.(false);
-          setShowImmersiveKeys(false);
-          break;
-        case " ":
-          e.preventDefault();
-          void player.toggle();
-          break;
-        case ",":
-        case "<":
-          e.preventDefault();
-          void player.prev();
-          break;
-        case ".":
-        case ">":
-          e.preventDefault();
-          void player.next();
-          break;
-        case "-":
-          e.preventDefault();
-          player.setVolume(player.volumeDb - 1);
-          break;
-        case "+":
-        case "=":
-          e.preventDefault();
-          player.setVolume(player.volumeDb + 1);
-          break;
-        case "ArrowLeft":
-          if (player.seekable) {
-            e.preventDefault();
-            player.seek(Math.max(0, player.position - 5));
-          }
-          break;
-        case "ArrowRight":
-          if (player.seekable) {
-            e.preventDefault();
-            const end = player.duration > 0 ? player.duration : player.position + 5;
-            player.seek(Math.min(end, player.position + 5));
-          }
-          break;
-        case "t":
-          e.preventDefault();
-          setHideImmersiveTitle((v) => !v);
-          break;
-        case "?":
-          e.preventDefault();
-          setShowImmersiveKeys((v) => !v);
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [immersive, onImmersiveChange]);
 
   if (immersive) {
     return (
@@ -208,50 +125,31 @@ export default function NowPlaying({ immersive = false, onImmersiveChange }: Now
 
         <div className="immersive-controls">
           <button onClick={() => onImmersiveChange?.(false)} aria-label="Exit immersive visualizer">
-            V EXIT
-          </button>
-          <button onClick={() => useVizStore.getState().cycle()} aria-label="Next visualizer mode">
-            v MODE
+            EXIT
           </button>
           <button onClick={() => void s.prev()} aria-label="Previous track">
-            &lt; TRK
+            <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
           </button>
           <button className="immersive-play" onClick={() => void s.toggle()} aria-label="Play or pause">
-            {playing ? "Spc ||" : "Spc >"}
+            <span className="nf-icon transport-icon" aria-hidden>
+              {playing ? "\uf04c" : "\uf04b"}
+            </span>
           </button>
           <button onClick={() => void s.next()} aria-label="Next track">
-            TRK &gt;
+            <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
           </button>
           <button onClick={() => s.setVolume(s.volumeDb - 1)} aria-label="Volume down">
-            - VOL
+            VOL -
           </button>
           <button onClick={() => s.setVolume(s.volumeDb + 1)} aria-label="Volume up">
             VOL +
           </button>
-          <button onClick={() => setHideImmersiveTitle((v) => !v)} aria-label="Toggle track title">
-            t TITLE
-          </button>
-          <button onClick={() => setShowImmersiveKeys((v) => !v)} aria-label="Show keys">
-            ? KEYS
+          <button onClick={() => setHideImmersiveTitle((v) => !v)} aria-label="Toggle track title or source">
+            {hideImmersiveTitle ? "TITLE" : "SOURCE"}
           </button>
         </div>
 
         <div aria-hidden />
-
-        {showImmersiveKeys ? (
-          <div className="immersive-keymap panel panel-accent" role="dialog" aria-label="Immersive controls">
-            <div className="immersive-keymap-title">FULL VISUALIZER KEYS</div>
-            <div>V / Esc / b   Exit</div>
-            <div>v             Cycle visualizer</div>
-            <div>Space         Play / pause</div>
-            <div>&lt; &gt;           Previous / next track</div>
-            <div>Left / Right  Seek -/+ 5 seconds</div>
-            <div>- +           Volume</div>
-            <div>t             Track title / source</div>
-            <div>?             Toggle this help</div>
-            <button onClick={() => setShowImmersiveKeys(false)}>Close</button>
-          </div>
-        ) : null}
       </div>
     );
   }
@@ -281,7 +179,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange }: Now
           <div className="plugin-status dim">{pluginStatus}</div>
         ) : null}
 
-        <Visualizer onEnterImmersive={() => onImmersiveChange?.(true)} />
+        <Visualizer />
 
         {s.seekable ? (
           <DragMeter
@@ -299,17 +197,27 @@ export default function NowPlaying({ immersive = false, onImmersiveChange }: Now
           </div>
         )}
 
-        <div className="transport">
-          <button onClick={() => void s.prev()} aria-label="Previous">
-            <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
-          </button>
-          <button className="btn-primary" onClick={() => void s.toggle()} aria-label="Play/Pause">
-            <span className="nf-icon transport-icon" aria-hidden>
-              {playing ? "\uf04c" : "\uf04b"}
-            </span>
-          </button>
-          <button onClick={() => void s.next()} aria-label="Next">
-            <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
+        <div className="transport-row">
+          <span aria-hidden />
+          <div className="transport">
+            <button onClick={() => void s.prev()} aria-label="Previous">
+              <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
+            </button>
+            <button className="btn-primary" onClick={() => void s.toggle()} aria-label="Play/Pause">
+              <span className="nf-icon transport-icon" aria-hidden>
+                {playing ? "\uf04c" : "\uf04b"}
+              </span>
+            </button>
+            <button onClick={() => void s.next()} aria-label="Next">
+              <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
+            </button>
+          </div>
+          <button
+            className="viz-full-toggle"
+            onClick={() => onImmersiveChange?.(true)}
+            aria-label="Open full visualizer"
+          >
+            V
           </button>
         </div>
 

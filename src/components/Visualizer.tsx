@@ -52,7 +52,6 @@ function vizData(cols: number, rows: number): VizData {
 
 interface VisualizerProps {
   immersive?: boolean;
-  onEnterImmersive?: () => void;
 }
 
 /**
@@ -63,7 +62,7 @@ interface VisualizerProps {
  * sizes the canvas backing store to the real CSS dimensions. That prevents the
  * old 900x200 bitmap from being stretched into the 804x638 Tesla layout.
  */
-export default function Visualizer({ immersive = false, onEnterImmersive }: VisualizerProps) {
+export default function Visualizer({ immersive = false }: VisualizerProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [grid, setGrid] = useState({ cols: VIZ_COLS, rows: VIZ_ROWS });
   const index = useVizStore((s) => s.index);
@@ -146,19 +145,6 @@ export default function Visualizer({ immersive = false, onEnterImmersive }: Visu
         aria-hidden
       />
       <span className="viz-name">{name}</span>
-      {!immersive && onEnterImmersive ? (
-        <button
-          className="viz-full-toggle"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEnterImmersive();
-          }}
-          aria-label="Open full visualizer"
-        >
-          V FULL
-        </button>
-      ) : null}
     </div>
   );
 }

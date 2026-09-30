@@ -973,15 +973,23 @@ button.btn-primary {
  *   18px separators / bottom breathing room
  *   496px visualizer
  */
+.transport-row {
+  display: grid;
+  grid-template-columns: var(--tap-min) minmax(0, 1fr) var(--tap-min);
+  align-items: center;
+  gap: 8px;
+}
+
+.transport-row > .transport {
+  min-width: 0;
+}
+
 .viz-full-toggle {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  z-index: 2;
-  min-width: 88px;
-  min-height: 48px;
-  padding: 0.25rem 0.55rem;
-  background: color-mix(in srgb, var(--bg-sunken) 88%, transparent);
+  width: var(--tap-min);
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0;
+  background: var(--bg-sunken);
   border-color: var(--border-accent);
   color: var(--text-accent);
   font-weight: 700;
@@ -1068,7 +1076,7 @@ button.btn-primary {
 .immersive-controls {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(9, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
 
@@ -1090,24 +1098,3 @@ button.btn-primary {
   font-weight: 700;
 }
 
-.immersive-keymap {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  z-index: 40;
-  width: min(520px, calc(100vw - 32px));
-  transform: translate(-50%, -50%);
-  display: grid;
-  gap: 7px;
-  background: var(--bg-sunken);
-  box-shadow: 0 0 0 1px var(--border-accent), 0 12px 40px black;
-}
-
-.immersive-keymap-title {
-  color: var(--text-accent);
-  font-weight: 700;
-}
-
-.immersive-keymap button {
-  margin-top: 6px;
-}
