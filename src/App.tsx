@@ -19,12 +19,12 @@ import { applyTheme } from "./themes/engine";
 type Screen = "now" | "radio" | "podcast" | "servers" | "local" | "plugins";
 
 const NAV = [
-  { id: "now" as const, label: "Now Playing", compactLabel: "NOW" },
-  { id: "radio" as const, label: "Radio", compactLabel: "RADIO" },
-  { id: "podcast" as const, label: "Podcasts", compactLabel: "PODS" },
-  { id: "servers" as const, label: "Servers", compactLabel: "SERVERS" },
-  { id: "local" as const, label: "Local", compactLabel: "LOCAL" },
-  { id: "plugins" as const, label: "Plugins", compactLabel: "PLUGINS" },
+  { id: "now" as const, label: "Now Playing", compactLabel: "NOW", icon: "\uf001" },
+  { id: "radio" as const, label: "Radio", compactLabel: "RADIO", icon: "\uf1eb" },
+  { id: "podcast" as const, label: "Podcasts", compactLabel: "PODS", icon: "\uf130" },
+  { id: "servers" as const, label: "Servers", compactLabel: "SERVERS", icon: "\uf1c0" },
+  { id: "local" as const, label: "Local", compactLabel: "LOCAL", icon: "\uf07c" },
+  { id: "plugins" as const, label: "Plugins", compactLabel: "PLUGINS", icon: "\uf1e6" },
 ];
 
 function renderScreen(screen: Screen) {
@@ -81,6 +81,7 @@ export default function App() {
             onClick={() => setScreen(n.id)}
             aria-current={screen === n.id ? "page" : undefined}
           >
+            <span className="nf-icon nav-icon" aria-hidden>{n.icon}</span>
             <span className="nav-label nav-label-full">{n.label}</span>
             <span className="nav-label nav-label-compact">{n.compactLabel}</span>
           </button>
