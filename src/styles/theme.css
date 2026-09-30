@@ -358,6 +358,59 @@ button.btn-primary {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---- plugin toggles: the whole row is the touch control ---- */
+.plugin-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: var(--tap-min);
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-sunken);
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  color: var(--text);
+  text-align: left;
+  overflow: hidden;
+}
+
+.plugin-row:active {
+  background: var(--row-hover);
+  border-color: var(--border);
+}
+
+.plugin-row.is-enabled {
+  border-left-color: var(--accent);
+}
+
+.plugin-marker {
+  width: 1.4em;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.plugin-row.is-enabled .plugin-marker {
+  color: var(--accent);
+}
+
+.plugin-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-state {
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.plugin-row.is-enabled .plugin-state {
+  color: var(--accent);
+}
+
 /* ---- meters (seek + volume) ---- */
 .meter {
   position: relative;
