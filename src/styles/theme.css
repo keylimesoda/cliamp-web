@@ -423,6 +423,23 @@ button.btn-primary {
   display: block;
 }
 
+.viz-wrap {
+  position: relative;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.viz-name {
+  position: absolute;
+  top: calc(var(--gap) / 2);
+  right: calc(var(--gap) / 2);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
 /* transport controls (the big in-car buttons) */
 .transport {
   display: flex;

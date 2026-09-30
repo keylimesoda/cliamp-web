@@ -1,6 +1,6 @@
 // cliamp-web service worker — app-shell caching only.
 // Audio streams and provider APIs are never cached (no-store).
-const CACHE = "cliamp-shell-v1";
+const CACHE = "cliamp-shell-v2";
 // Relative to the worker's own URL, so the app works at any base path.
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg"];
 
@@ -25,17 +25,38 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Same-origin static assets: cache-first, network fallback.
-  if (req.mode === "navigate" || /\.(js|css|svg|png|webmanifest|woff2?)$/.test(url.pathname)) {
+  if (req.mode === "navigate") {
+    // Network-first so deploys propagate immediately; cached shell is the
+    // offline fallback.
     event.respondWith(
-      caches.match(req).then(
-        (hit) =>
-          hit ||
-          fetch(req).then((res) => {
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
             const copy = res.clone();
             caches.open(CACHE).then((cache) => cache.put(req, copy));
-            return res;
-          })
+          }
+          return res;
+        })
+        .catch(() =>
+          caches.match(req).then((hit) => hit || caches.match("index.html"))
+        )
+    );
+    return;
+  }
+
+  // Same-origin static assets: cache-first, network fallback.
+  // Only successful responses are ever cached.
+  if (/\.(js|css|svg|png|webmanifest|woff2?)$/.test(url.pathname)) {
+    event.respondWith(
+      caches.match(req).then((hit) =>
+        hit ||
+        fetch(req).then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
       )
     );
   }

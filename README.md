@@ -24,8 +24,8 @@ running in the browser.
 ## Features
 
 - **Now Playing** — touch transport (prev / play-pause / next), seek bar,
-  10-band EQ with presets, pitch/time-stretch, mono, shuffle/repeat,
-  real-time spectrum visualizer, volume.
+  10-band EQ with presets, pitch/time-stretch, mono, shuffle/repeat, volume,
+  and **32 real-time visualizers** — tap the visualizer to cycle modes.
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
   - **Podcasts** — Apple top charts, search, RSS enclosures.
@@ -42,6 +42,28 @@ running in the browser.
 - **Themes** — 22 vendored cliamp themes as runtime CSS variables.
 - **PWA** — installable, service-worker app-shell caching, fullscreen
   landscape manifest.
+
+## Visualizers
+
+All 32 visualizer modes from the original cliamp, ported to a canvas
+character-grid renderer. **Tap/click the visualizer to cycle** (the original's
+`v` key); the choice persists. Rendering runs at ~60 FPS while playing and
+throttles to ~5 FPS when idle.
+
+| | |
+| --- | --- |
+| ![Retro](docs/screenshots/viz/retro.png) | ![Omarchy](docs/screenshots/viz/omarchy.png) |
+| ![RedSector](docs/screenshots/viz/red-sector.png) | ![Matrix](docs/screenshots/viz/matrix.png) |
+| ![ClassicLED](docs/screenshots/viz/classic-led.png) | ![Stereo](docs/screenshots/viz/stereo.png) |
+| ![Logo](docs/screenshots/viz/logo.png) | ![Scope](docs/screenshots/viz/scope.png) |
+| ![Sand](docs/screenshots/viz/sand.png) | ![Firework](docs/screenshots/viz/firework.png) |
+| ![Bars](docs/screenshots/viz/bars.png) | |
+
+`Bars` `BarsDot` `Rain` `BarsOutline` `Bricks` `Columns` `ClassicPeak` `Wave`
+`Scatter` `Flame` `Retro` `Pulse` `Matrix` `Binary` `Sakura` `Firework`
+`Bubbles` `Logo` `Terrain` `Scope` `Heartbeat` `Butterfly` `Ascii` `Firefly`
+`Mosaic` `Sand` `Geyser` `ClassicLED` `Stereo` `Mirror` `Omarchy` `RedSector`
+(plus `None` to hide the visualizer).
 
 ## Quickstart
 
@@ -106,7 +128,8 @@ src/
   core/        audio engine, playlist, spectrum, md5, types
   providers/   radio, podcast, navidrome, jellyfin/emby, plex, audiobookshelf, lyrion
   lua/         lexer, parser, VM, plugin host, bundled plugins
-  store/       player, servers, history, plugins (zustand)
+  viz/         32 character-grid visualizers, canvas drawer, registry
+  store/       player, servers, history, plugins, viz (zustand)
   components/  NowPlaying, RadioBrowser, PodcastBrowser, ServerBrowser,
                ServersScreen, PluginsScreen, LyricsOverlay, Visualizer, …
 public/        manifest, service worker, icons, wsola worklet

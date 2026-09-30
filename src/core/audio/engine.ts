@@ -448,6 +448,11 @@ export class AudioEngine {
     return this.bands;
   }
 
+  /** Time-domain tap for waveform visualizers; null before boot. */
+  getWaveform(): Float32Array<ArrayBuffer> | null {
+    return this.sampleBuf;
+  }
+
   startTick(): void {
     if (this.tickTimer !== null || !this.ctx || !this.analyser) return;
     this.tickTimer = window.setInterval(() => {
@@ -455,6 +460,7 @@ export class AudioEngine {
       if (this.state === "stopped") {
         this.spectrum.reset();
         this.bands.fill(0);
+        if (this.sampleBuf) this.sampleBuf.fill(0);
         return;
       }
       if (this.state === "playing" && ctx.state === "running") {
@@ -466,6 +472,7 @@ export class AudioEngine {
         // Paused/buffering: feed silence so the display decays to rest.
         const smooth = this.spectrum.push(bandLevels(this.zeroBuf, ctx.sampleRate));
         for (let i = 0; i < this.bands.length; i++) this.bands[i] = smooth[i];
+        if (this.sampleBuf) this.sampleBuf.fill(0);
       }
     }, 33);
   }
