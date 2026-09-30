@@ -199,35 +199,39 @@ export default function NowPlaying() {
         ) : (
           s.tracks.map((t, i) => (
             <div
-              className={"row" + (i === s.currentDisplay ? " is-active" : "")}
+              className={"row queue-row" + (i === s.currentDisplay ? " is-active" : "")}
               key={t.path + i}
               onClick={() => void s.playDisplay(i)}
               role="button"
               aria-label={t.title}
             >
-              <span className="marker" aria-hidden>
-                {i === s.currentDisplay ? <span className="nf-icon">{"\uf04b"}</span> : ""}
-              </span>
-              <span className="num">{i + 1}</span>
-              <span className="title">{t.title}</span>
-              {t.favorite ? (
-                <span className="marker is-fav" aria-hidden>
-                  <span className="nf-icon">{"\uf004"}</span>
+              <span className="queue-index">
+                <span className="marker" aria-hidden>
+                  {i === s.currentDisplay ? <span className="nf-icon">{"\uf04b"}</span> : ""}
                 </span>
-              ) : null}
-              <span className="dur">
-                {t.stream ? "LIVE" : t.durationSecs ? fmtTime(t.durationSecs) : "--:--"}
+                <span className="num">{i + 1}</span>
               </span>
-              <span
-                className={"marker" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
-                role="button"
-                aria-label="favorite"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  favorites.toggle(t);
-                }}
-              >
-                <span className="nf-icon">{"\uf005"}</span>
+              <span className="title">{t.title}</span>
+              <span className="queue-meta">
+                {t.favorite ? (
+                  <span className="marker is-fav" aria-hidden>
+                    <span className="nf-icon">{"\uf004"}</span>
+                  </span>
+                ) : null}
+                <span className="dur">
+                  {t.stream ? "LIVE" : t.durationSecs ? fmtTime(t.durationSecs) : "--:--"}
+                </span>
+                <span
+                  className={"queue-favorite-toggle marker" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
+                  role="button"
+                  aria-label="favorite"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    favorites.toggle(t);
+                  }}
+                >
+                  <span className="nf-icon">{"\uf005"}</span>
+                </span>
               </span>
             </div>
           ))
