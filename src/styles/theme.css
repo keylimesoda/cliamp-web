@@ -82,11 +82,14 @@
     "DejaVu Sans Mono", Menlo, Consolas, monospace;
   --font-symbols: "CLIAMP Nerd Symbols", "Symbols Nerd Font Mono",
     "CLIAMP JetBrains Mono", monospace;
-  --fs-xs: clamp(0.72rem, 0.66rem + 0.2vw, 0.85rem);
-  --fs-sm: clamp(0.85rem, 0.78rem + 0.25vw, 1rem);
-  --fs-md: clamp(1rem, 0.92rem + 0.3vw, 1.2rem);
-  --fs-lg: clamp(1.3rem, 1.15rem + 0.5vw, 1.7rem);
-  --fs-xl: clamp(1.9rem, 1.6rem + 0.9vw, 2.6rem);
+  /* A terminal has one character-cell size. Hierarchy comes from weight,
+     color, spacing, borders, and inverse/selected states instead. */
+  --cell-fs: 1rem;
+  --fs-xs: var(--cell-fs);
+  --fs-sm: var(--cell-fs);
+  --fs-md: var(--cell-fs);
+  --fs-lg: var(--cell-fs);
+  --fs-xl: var(--cell-fs);
 
   /* ---- touch: car-safe hit targets ---- */
   --tap-min: 56px; /* minimum target (recon: no hover, no keyboard) */
@@ -131,7 +134,7 @@ body {
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--fs-md);
-  line-height: 1.45;
+  line-height: 1.25;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   /* touch-first: no accidental text selection, no tap highlight */
@@ -209,7 +212,7 @@ body::before {
 }
 
 .transport-icon {
-  font-size: 1.35em;
+  font-size: 1em;
 }
 
 /* ---- buttons ---- */
@@ -244,7 +247,8 @@ button.btn-accent {
 button.btn-primary {
   min-width: var(--tap-lg);
   min-height: var(--tap-lg);
-  font-size: var(--fs-lg);
+  font-size: inherit;
+  font-weight: 700;
   border-color: var(--border-accent);
   color: var(--text-accent);
   box-shadow: var(--glow-dim);
@@ -265,6 +269,10 @@ button.btn-primary {
   flex: 1 1 0;
   min-width: 0;
 }
+.app-nav button.btn-accent {
+  background: var(--row-active);
+  font-weight: 700;
+}
 .nav-label {
   white-space: nowrap;
 }
@@ -284,8 +292,9 @@ button.btn-primary {
   border-radius: var(--radius);
   background: var(--bg-sunken);
   color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: 1.5;
+  font-size: inherit;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 /* ---- generic panel / card ---- */
@@ -327,6 +336,9 @@ button.btn-primary {
 .row.is-active {
   background: var(--row-active);
   border-left-color: var(--accent);
+}
+.row.is-active .title {
+  font-weight: 700;
 }
 .row .marker {
   width: 1.4em;
@@ -403,12 +415,13 @@ button.btn-primary {
 
 .plugin-state {
   color: var(--text-dim);
-  font-size: var(--fs-sm);
+  font-size: inherit;
   white-space: nowrap;
 }
 
 .plugin-row.is-enabled .plugin-state {
   color: var(--accent);
+  font-weight: 700;
 }
 
 /* ---- now-playing queue: single horizontal touch row ---- */
@@ -507,7 +520,7 @@ button.btn-primary {
   gap: var(--gap);
 }
 .app-title {
-  font-size: var(--fs-lg);
+  font-size: inherit;
   letter-spacing: 0.35em;
   font-weight: 700;
   color: var(--text-accent);
@@ -529,7 +542,7 @@ button.btn-primary {
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
-  font-size: var(--fs-lg);
+  font-size: inherit;
   color: var(--text-accent);
   overflow: hidden;
 }
@@ -537,6 +550,7 @@ button.btn-primary {
   color: var(--text);
 }
 .track-line .name {
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -545,7 +559,7 @@ button.btn-primary {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: var(--fs-sm);
+  font-size: inherit;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -561,7 +575,7 @@ button.btn-primary {
 }
 .plugin-status {
   margin-top: 0.35rem;
-  font-size: 0.78rem;
+  font-size: inherit;
   letter-spacing: 0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -588,9 +602,11 @@ button.btn-primary {
   position: absolute;
   top: calc(var(--gap) / 2);
   right: calc(var(--gap) / 2);
-  font-size: 0.65rem;
+  font-size: inherit;
   letter-spacing: 0.08em;
   color: var(--text-dim);
+  background: color-mix(in srgb, var(--bg-sunken) 82%, transparent);
+  padding: 0 0.25em;
   pointer-events: none;
 }
 
@@ -700,7 +716,7 @@ button.btn-primary {
   }
 
   .app-title {
-    font-size: 1rem;
+    font-size: inherit;
     letter-spacing: 0.24em;
   }
 
@@ -714,12 +730,12 @@ button.btn-primary {
   }
 
   .track-line {
-    font-size: 1rem;
+    font-size: inherit;
   }
 
   .plugin-status {
     margin-top: 0;
-    font-size: 0.72rem;
+    font-size: inherit;
   }
 
   .visualizer {
@@ -739,7 +755,8 @@ button.btn-primary {
   .transport .btn-primary {
     min-width: 64px;
     min-height: 64px;
-    font-size: 1.35rem;
+    font-size: inherit;
+    font-weight: 700;
   }
 
   .advanced-controls {
@@ -776,7 +793,7 @@ button.btn-primary {
     padding-bottom: var(--gap-sm);
     background: var(--bg-sunken);
     color: var(--text-accent);
-    font-size: var(--fs-sm);
+    font-size: inherit;
   }
 
   .advanced-close {
@@ -813,7 +830,7 @@ button.btn-primary {
   .volume-label {
     display: inline;
     color: var(--text-dim);
-    font-size: var(--fs-xs);
+    font-size: inherit;
   }
 
   .volume-control .meter {
