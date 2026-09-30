@@ -425,11 +425,30 @@ button.btn-primary {
   color: var(--accent);
 }
 
-.plugin-title {
+.plugin-copy {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.plugin-name {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.plugin-description {
+  min-width: 0;
+  color: var(--text-dim);
+  line-height: 1.1;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .plugin-state {
@@ -989,10 +1008,35 @@ button.btn-primary {
   min-width: var(--tap-min);
   min-height: var(--tap-min);
   padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.viz-full-toggle:active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.viz-full-glyph {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-accent);
+  border-radius: 2px;
   background: var(--bg-sunken);
-  border-color: var(--border-accent);
   color: var(--text-accent);
   font-weight: 700;
+  line-height: 1;
+}
+
+.viz-full-toggle:active .viz-full-glyph {
+  border-color: var(--text-accent);
+  box-shadow: var(--glow-dim);
 }
 
 .immersive-app {

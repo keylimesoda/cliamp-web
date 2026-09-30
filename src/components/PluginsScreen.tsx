@@ -44,9 +44,11 @@ export default function PluginsScreen() {
                 <span className="plugin-marker" aria-hidden>
                   {p.enabled ? "●" : "○"}
                 </span>
-                <span className="plugin-title">
-                  {p.meta.name}
-                  {p.meta.description ? <span className="dim"> — {p.meta.description}</span> : null}
+                <span className="plugin-copy">
+                  <span className="plugin-name">{p.meta.name}</span>
+                  {p.meta.description ? (
+                    <span className="plugin-description">{p.meta.description}</span>
+                  ) : null}
                 </span>
                 <span className="plugin-state">
                   {p.enabled ? "ENABLED" : "DISABLED"}

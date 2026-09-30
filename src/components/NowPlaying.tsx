@@ -217,7 +217,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange }: Now
             onClick={() => onImmersiveChange?.(true)}
             aria-label="Open full visualizer"
           >
-            V
+            <span className="viz-full-glyph" aria-hidden>V</span>
           </button>
         </div>
 
