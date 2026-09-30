@@ -411,6 +411,41 @@ button.btn-primary {
   color: var(--accent);
 }
 
+/* ---- now-playing queue: single horizontal touch row ---- */
+.queue-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: var(--tap-min);
+}
+
+.queue-index {
+  display: grid;
+  grid-template-columns: 1.4em 2.2em;
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+.queue-row .title {
+  white-space: nowrap;
+}
+
+.queue-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  min-width: max-content;
+}
+
+.queue-meta .dur {
+  margin-left: 0;
+  min-width: 4.5em;
+  text-align: right;
+}
+
+.queue-favorite-toggle {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 /* ---- meters (seek + volume) ---- */
 .meter {
   position: relative;
