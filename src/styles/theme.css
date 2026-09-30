@@ -963,3 +963,151 @@ button.btn-primary {
   text-shadow: var(--glow);
   font-weight: 600;
 }
+
+
+/* ---- CLIMP full visualizer / immersive mode ---- */
+/*
+ * CLIMP's V screen gives the visualizer four times as much visible space as
+ * playback chrome. At the Tesla 804x638 target this grid resolves to:
+ *   22 track + 22 time + 28 seek + 52 controls = 124px visible chrome
+ *   18px separators / bottom breathing room
+ *   496px visualizer
+ */
+.viz-full-toggle {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  z-index: 2;
+  min-width: 88px;
+  min-height: 48px;
+  padding: 0.25rem 0.55rem;
+  background: color-mix(in srgb, var(--bg-sunken) 88%, transparent);
+  border-color: var(--border-accent);
+  color: var(--text-accent);
+  font-weight: 700;
+}
+
+.immersive-app {
+  width: 100%;
+  max-width: 804px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 8px;
+  display: grid;
+  grid-template-rows: 22px 22px 5px minmax(0, 1fr) 5px 28px 52px 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.immersive-track-line,
+.immersive-time-status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.immersive-track-line {
+  color: var(--text-accent);
+}
+
+.immersive-track-line .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+
+.immersive-time-status {
+  justify-content: space-between;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.immersive-time-status .state {
+  color: var(--playing);
+  font-weight: 700;
+}
+
+.immersive-time-status .state.is-paused {
+  color: var(--warn);
+}
+
+.immersive-app .viz-wrap {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.immersive-app .visualizer {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-color: var(--border-accent);
+}
+
+.immersive-app .viz-name {
+  top: 6px;
+  right: 6px;
+}
+
+.immersive-seek-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.immersive-seek-row .meter {
+  width: 100%;
+}
+
+.immersive-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.immersive-controls button {
+  min-width: 0;
+  min-height: 52px;
+  height: 52px;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  background: var(--bg-sunken);
+  font-size: inherit;
+}
+
+.immersive-controls .immersive-play {
+  color: var(--text-accent);
+  border-color: var(--border-accent);
+  background: var(--row-active);
+  font-weight: 700;
+}
+
+.immersive-keymap {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 40;
+  width: min(520px, calc(100vw - 32px));
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 7px;
+  background: var(--bg-sunken);
+  box-shadow: 0 0 0 1px var(--border-accent), 0 12px 40px black;
+}
+
+.immersive-keymap-title {
+  color: var(--text-accent);
+  font-weight: 700;
+}
+
+.immersive-keymap button {
+  margin-top: 6px;
+}

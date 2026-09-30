@@ -27,10 +27,10 @@ const NAV = [
   { id: "plugins" as const, label: "Plugins", compactLabel: "PLUGINS", icon: "\uf1e6" },
 ];
 
-function renderScreen(screen: Screen) {
+function renderScreen(screen: Screen, immersive: boolean, setImmersive: (enabled: boolean) => void) {
   switch (screen) {
     case "now":
-      return <NowPlaying />;
+      return <NowPlaying immersive={immersive} onImmersiveChange={setImmersive} />;
     case "radio":
       return <RadioBrowser />;
     case "podcast":
@@ -49,6 +49,7 @@ export default function App() {
   const booted = usePlayerStore((s) => s.booted);
   const theme = usePlayerStore((s) => s.theme);
   const [screen, setScreen] = useState<Screen>("now");
+  const [immersive, setImmersive] = useState(false);
 
   useEffect(() => {
     void boot();
@@ -72,13 +73,16 @@ export default function App() {
 
   return (
     <>
-      {renderScreen(screen)}
-      <nav className="app-nav" aria-label="Primary">
+      {renderScreen(screen, immersive, setImmersive)}
+      {!immersive || screen !== "now" ? <nav className="app-nav" aria-label="Primary">
         {NAV.map((n) => (
           <button
             key={n.id}
             className={screen === n.id ? "btn-accent" : ""}
-            onClick={() => setScreen(n.id)}
+            onClick={() => {
+              setImmersive(false);
+              setScreen(n.id);
+            }}
             aria-current={screen === n.id ? "page" : undefined}
           >
             <span className="nf-icon nav-icon" aria-hidden>{n.icon}</span>
@@ -86,7 +90,7 @@ export default function App() {
             <span className="nav-label nav-label-compact">{n.compactLabel}</span>
           </button>
         ))}
-      </nav>
+      </nav> : null}
     </>
   );
 }

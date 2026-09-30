@@ -46,7 +46,7 @@ export function drawFrame(canvas: HTMLCanvasElement, frame: VizFrame, data: VizD
   const offX = (w - cellW * cols) / 2;
   const offY = (h - cellH * rows) / 2;
 
-  ctx.font = `${Math.max(4, Math.floor(size))}px monospace`;
+  ctx.font = `${Math.max(4, Math.floor(size))}px "CLIAMP JetBrains Mono", "JetBrains Mono", monospace`;
   ctx.textBaseline = "top";
 
   for (let r = 0; r < rows; r++) {
