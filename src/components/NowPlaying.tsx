@@ -66,7 +66,7 @@ export default function NowPlaying() {
       <section className="nowplaying panel panel-accent">
         <div className="track-line">
           <span className="glyph" aria-hidden>
-            ♫
+            &gt;
           </span>
           <span className="name">{trackName(s.track)}</span>
         </div>
@@ -101,13 +101,13 @@ export default function NowPlaying() {
 
         <div className="transport">
           <button onClick={() => void s.prev()} aria-label="Previous">
-            ⏮
+            PREV
           </button>
           <button className="btn-primary" onClick={() => void s.toggle()} aria-label="Play/Pause">
-            {playing ? "⏸" : "▶"}
+            {playing ? "PAUSE" : "PLAY"}
           </button>
           <button onClick={() => void s.next()} aria-label="Next">
-            ⏭
+            NEXT
           </button>
         </div>
 
@@ -172,7 +172,7 @@ export default function NowPlaying() {
               aria-expanded={showAdvanced}
               aria-controls="advanced-controls"
             >
-              ⋯ More
+              MORE
             </button>
             <div className="volume-control">
               <span className="volume-label">VOL</span>

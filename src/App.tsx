@@ -19,12 +19,12 @@ import { applyTheme } from "./themes/engine";
 type Screen = "now" | "radio" | "podcast" | "servers" | "local" | "plugins";
 
 const NAV = [
-  { id: "now" as const, label: "♫ Now Playing", compactLabel: "♫ Now" },
-  { id: "radio" as const, label: "📡 Radio", compactLabel: "📡 Radio" },
-  { id: "podcast" as const, label: "🎙 Podcasts", compactLabel: "🎙 Pods" },
-  { id: "servers" as const, label: "🗄 Servers", compactLabel: "🗄 Servers" },
-  { id: "local" as const, label: "◷ Local", compactLabel: "◷ Local" },
-  { id: "plugins" as const, label: "⚙ Plugins", compactLabel: "⚙ Plugins" },
+  { id: "now" as const, label: "Now Playing", compactLabel: "NOW" },
+  { id: "radio" as const, label: "Radio", compactLabel: "RADIO" },
+  { id: "podcast" as const, label: "Podcasts", compactLabel: "PODS" },
+  { id: "servers" as const, label: "Servers", compactLabel: "SERVERS" },
+  { id: "local" as const, label: "Local", compactLabel: "LOCAL" },
+  { id: "plugins" as const, label: "Plugins", compactLabel: "PLUGINS" },
 ];
 
 function renderScreen(screen: Screen) {

@@ -94,7 +94,8 @@ export class AudioEngine {
     this.initPromise = (async () => {
       const ctx = new AudioContext({ latencyHint: "interactive" });
       this.ctx = ctx;
-      await ctx.audioWorklet.addModule("/worklets/wsola.js");
+      const workletUrl = new URL("worklets/wsola.js", document.baseURI).href;
+      await ctx.audioWorklet.addModule(workletUrl);
 
       const source = ctx.createMediaElementSource(this.element);
 
