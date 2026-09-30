@@ -65,8 +65,8 @@ export default function NowPlaying() {
 
       <section className="nowplaying panel panel-accent">
         <div className="track-line">
-          <span className="glyph" aria-hidden>
-            &gt;
+          <span className="glyph nf-icon" aria-hidden>
+            {"\uf001"}
           </span>
           <span className="name">{trackName(s.track)}</span>
         </div>
@@ -101,13 +101,15 @@ export default function NowPlaying() {
 
         <div className="transport">
           <button onClick={() => void s.prev()} aria-label="Previous">
-            PREV
+            <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
           </button>
           <button className="btn-primary" onClick={() => void s.toggle()} aria-label="Play/Pause">
-            {playing ? "PAUSE" : "PLAY"}
+            <span className="nf-icon transport-icon" aria-hidden>
+              {playing ? "\uf04c" : "\uf04b"}
+            </span>
           </button>
           <button onClick={() => void s.next()} aria-label="Next">
-            NEXT
+            <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
           </button>
         </div>
 
@@ -166,14 +168,6 @@ export default function NowPlaying() {
           </div>
 
           <div className="mix-primary">
-            <button
-              className="compact-more-toggle"
-              onClick={() => setShowAdvanced(true)}
-              aria-expanded={showAdvanced}
-              aria-controls="advanced-controls"
-            >
-              MORE
-            </button>
             <div className="volume-control">
               <span className="volume-label">VOL</span>
               <DragMeter
@@ -185,6 +179,14 @@ export default function NowPlaying() {
                 label="Volume"
               />
             </div>
+            <button
+              className="compact-more-toggle"
+              onClick={() => setShowAdvanced(true)}
+              aria-expanded={showAdvanced}
+              aria-controls="advanced-controls"
+            >
+              MORE
+            </button>
           </div>
         </div>
       </section>
@@ -204,13 +206,13 @@ export default function NowPlaying() {
               aria-label={t.title}
             >
               <span className="marker" aria-hidden>
-                {i === s.currentDisplay ? "▶" : ""}
+                {i === s.currentDisplay ? <span className="nf-icon">{"\uf04b"}</span> : ""}
               </span>
               <span className="num">{i + 1}</span>
               <span className="title">{t.title}</span>
               {t.favorite ? (
                 <span className="marker is-fav" aria-hidden>
-                  ♥
+                  <span className="nf-icon">{"\uf004"}</span>
                 </span>
               ) : null}
               <span className="dur">
@@ -225,7 +227,7 @@ export default function NowPlaying() {
                   favorites.toggle(t);
                 }}
               >
-                ★
+                <span className="nf-icon">{"\uf005"}</span>
               </span>
             </div>
           ))
