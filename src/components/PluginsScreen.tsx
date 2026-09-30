@@ -62,7 +62,7 @@ export default function PluginsScreen() {
             <div className="dim" style={{ fontFamily: "var(--mono)" }}>— no log output —</div>
           ) : (
             logs.map((line, i) => (
-              <div key={i} className="dim" style={{ fontFamily: "var(--mono)", fontSize: "0.72rem", whiteSpace: "pre-wrap" }}>
+              <div key={i} className="dim" style={{ fontFamily: "inherit", whiteSpace: "pre-wrap" }}>
                 {line}
               </div>
             ))
