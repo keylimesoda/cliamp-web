@@ -251,7 +251,7 @@ async function armNextGapless(): Promise<void> {
   if (!next || next.stream) return;
   try {
     const src = await resolveTrack(next);
-    if (src.seekable) eng.armGapless(next, src.url, src.headers);
+    if (src.seekable && !src.direct) eng.armGapless(next, src.url, src.headers);
   } catch {
     // gapless preload is best-effort; playback continues without it
   }
@@ -263,7 +263,10 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number)
     await eng.load(track, src, startAtSec);
     eng.startTick();
   } catch (e) {
-    setState({ error: e instanceof Error ? e.message : "playback failed" });
+    setState({
+      state: eng.snapshot().state,
+      error: e instanceof Error ? e.message : "playback failed",
+    });
     return;
   }
   scrobbled = false;
@@ -280,6 +283,7 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number)
     position: startAtSec,
     duration: eng.getDuration(),
     seekable: eng.isSeekable(),
+    error: null,
   });
   syncMediaSession();
   void armNextGapless();
