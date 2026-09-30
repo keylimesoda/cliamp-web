@@ -47,6 +47,8 @@ export class AudioEngine {
   private cb: EngineCallbacks;
   private ctx: AudioContext | null = null;
   private element = new Audio();
+  private directElement = new Audio();
+  private directMode = false;
   private wsolaNode: AudioWorkletNode | null = null;
   private eqFilters: BiquadFilterNode[] = [];
   private chainIn: GainNode | null = null;
@@ -84,6 +86,34 @@ export class AudioEngine {
   constructor(cb: EngineCallbacks = {}) {
     this.cb = cb;
     this.element.preload = "auto";
+    this.directElement.preload = "auto";
+    this.directElement.addEventListener("playing", () => {
+      if (this.directMode) this.setState("playing");
+    });
+    this.directElement.addEventListener("pause", () => {
+      if (
+        this.directMode &&
+        (this.state === "playing" || this.state === "buffering" || this.state === "seeking")
+      ) {
+        this.setState("paused");
+      }
+    });
+    this.directElement.addEventListener("waiting", () => {
+      if (this.directMode) this.setState("buffering");
+    });
+    this.directElement.addEventListener("seeking", () => {
+      if (this.directMode) this.setState("seeking");
+    });
+    this.directElement.addEventListener("ended", () => {
+      if (!this.directMode) return;
+      this.setState("stopped");
+      this.cb.onTrackEnd?.();
+    });
+    this.directElement.addEventListener("error", () => {
+      if (this.directMode && this.directElement.error) {
+        this.cb.onError?.(this.directElement.error.message || "playback error");
+      }
+    });
   }
 
   // ---- lifecycle ------------------------------------------------------
@@ -190,12 +220,36 @@ export class AudioEngine {
 
   /** Load and play a track from a resolved source. */
   async load(track: Track, src: ResolvedSource, startAtSec = 0): Promise<void> {
-    await this.init();
-    const ctx = this.ctx!;
     this.track = track;
     this.stopGapless();
-    this.resetWorklet();
     this.setState("stopped");
+
+    // Some podcast/CDN enclosures intentionally do not grant CORS access.
+    // A MediaElementSource connected to Web Audio is silent for those URLs,
+    // even though a plain <audio> element is allowed to play them. Keep a
+    // separate element for those sources so playback stays inside the user's
+    // original tap gesture and never enters the doomed Web Audio path first.
+    if (src.direct) {
+      this.directMode = true;
+      this.element.pause();
+      this.bands.fill(0);
+      if (this.sampleBuf) this.sampleBuf.fill(0);
+      const el = this.directElement;
+      el.volume = Math.min(1, dbToGain(this.volumeDb));
+      el.playbackRate = this.speed;
+      el.src = src.url;
+      el.load();
+      this.applyResume(el, src, startAtSec);
+      await el.play();
+      this.notify();
+      return;
+    }
+
+    this.directMode = false;
+    this.directElement.pause();
+    await this.init();
+    const ctx = this.ctx!;
+    this.resetWorklet();
     const el = this.element;
     await ctx.resume();
     try {
@@ -211,16 +265,17 @@ export class AudioEngine {
       await el.play();
       this.staleError = false; // succeeded: no stale error pending
     } catch {
-      // Server sent no CORS headers: fall back to tainted playback.
-      // Audio still plays, but the worklet/analyser receive zero-filled
-      // input, so route around the worklet (no speed/visualizer).
+      // Last-resort direct playback for sources that reject CORS.
       this.corsMode = false;
-      el.removeAttribute("crossorigin");
-      el.src = src.url;
-      el.load();
-      this.applyResume(el, src, startAtSec);
-      this.applyRouting();
-      await el.play(); // throws to the caller if this also fails
+      el.pause();
+      const direct = this.directElement;
+      this.directMode = true;
+      direct.volume = Math.min(1, dbToGain(this.volumeDb));
+      direct.playbackRate = this.speed;
+      direct.src = src.url;
+      direct.load();
+      this.applyResume(direct, src, startAtSec);
+      await direct.play();
     }
     this.notify();
   }
@@ -242,6 +297,10 @@ export class AudioEngine {
   }
 
   async play(): Promise<void> {
+    if (this.directMode) {
+      await this.directElement.play();
+      return;
+    }
     await this.init();
     const ctx = this.ctx!;
     await ctx.resume();
@@ -250,6 +309,10 @@ export class AudioEngine {
   }
 
   pause(): void {
+    if (this.directMode) {
+      this.directElement.pause();
+      return;
+    }
     if (!this.ctx) return;
     if (this.gaplessSource) this.ctx.suspend();
     else this.element.pause();
@@ -257,8 +320,12 @@ export class AudioEngine {
 
   /** Seek within the current (finite) source. */
   seek(sec: number): void {
-    if (!this.ctx || !this.track) return;
-    if (this.track.stream) return;
+    if (!this.track || this.track.stream) return;
+    if (this.directMode) {
+      this.directElement.currentTime = Math.max(0, sec);
+      return;
+    }
+    if (!this.ctx) return;
     if (this.gaplessSource) {
       const buffer = this.gaplessSource.buffer;
       if (!buffer) return;
@@ -284,6 +351,7 @@ export class AudioEngine {
   setVolumeDb(db: number): void {
     this.volumeDb = Math.min(VOLUME_MAX_DB, Math.max(VOLUME_MIN_DB, db));
     if (this.volumeGain) this.volumeGain.gain.value = dbToGain(this.volumeDb);
+    this.directElement.volume = Math.min(1, dbToGain(this.volumeDb));
     this.notify();
   }
 
@@ -299,6 +367,7 @@ export class AudioEngine {
 
   setSpeed(ratio: number): void {
     this.speed = Math.min(SPEED_MAX, Math.max(SPEED_MIN, ratio));
+    this.directElement.playbackRate = this.speed;
     this.applySpeedToWorklet();
     this.notify();
   }
@@ -422,6 +491,10 @@ export class AudioEngine {
 
   /** Current playback position in seconds (0 for unknown/live). */
   getPosition(): number {
+    if (this.directMode) {
+      const t = this.directElement.currentTime;
+      return Number.isFinite(t) ? t : 0;
+    }
     if (!this.ctx) return 0;
     if (this.gaplessSource) {
       return this.gaplessOffset + (this.ctx.currentTime - this.gaplessStartedAt);
@@ -432,6 +505,10 @@ export class AudioEngine {
 
   /** Duration in seconds (0 for unknown/live). */
   getDuration(): number {
+    if (this.directMode) {
+      const d = this.directElement.duration;
+      return Number.isFinite(d) ? d : 0;
+    }
     if (this.gaplessSource) return this.gaplessSource.buffer?.duration ?? 0;
     const d = this.element.duration;
     return Number.isFinite(d) ? d : 0;
