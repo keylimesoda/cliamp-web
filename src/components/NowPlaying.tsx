@@ -207,7 +207,7 @@ export default function NowPlaying() {
             >
               <span className="queue-index">
                 <span className="marker" aria-hidden>
-                  {i === s.currentDisplay ? <span className="nf-icon">{"\uf04b"}</span> : ""}
+                  {i === s.currentDisplay ? (playing ? <span className="nf-icon">{"\uf04b"}</span> : ">") : ""}
                 </span>
                 <span className="num">{i + 1}</span>
               </span>
