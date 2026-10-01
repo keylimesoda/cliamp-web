@@ -196,6 +196,17 @@ export default function RadioBrowser() {
                   <span className="marker" aria-hidden>♫</span>
                   <span className="title">{t.title}</span>
                   <span className="dur">{t.genre ?? "LIVE"}</span>
+                  <span
+                    className={"radio-star" + (prefs.isFavorite(t.path) ? " is-fav" : "")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      prefs.toggleFavorite(t.path);
+                    }}
+                    role="button"
+                    aria-label={prefs.isFavorite(t.path) ? "Remove favorite" : "Favorite station"}
+                  >
+                    {prefs.isFavorite(t.path) ? "★" : "☆"}
+                  </span>
                 </div>
               ))}
               {builtins.busy ? <Row label="loading built-in channels…" /> : null}
@@ -220,19 +231,20 @@ export default function RadioBrowser() {
                 role="button"
                 aria-label={c.name}
               >
+                <span className="marker" aria-hidden>▸</span>
+                <span className="title">{c.name}</span>
+                <span className="dur">{c.stationcount}</span>
                 <span
-                  className={"marker" + (prefs.isPinned(c.code) ? " is-fav" : "")}
+                  className={"radio-star" + (prefs.isPinned(c.code) ? " is-fav" : "")}
                   onClick={(e) => {
                     e.stopPropagation();
                     prefs.togglePin(c.code);
                   }}
                   role="button"
-                  aria-label="Pin"
+                  aria-label={prefs.isPinned(c.code) ? "Unpin country" : "Pin country"}
                 >
-                  {prefs.isPinned(c.code) ? "★" : ""}
+                  {prefs.isPinned(c.code) ? "★" : "☆"}
                 </span>
-                <span className="title">{c.name}</span>
-                <span className="dur">{c.stationcount}</span>
               </div>
             ))}
           </div>
@@ -260,19 +272,20 @@ export default function RadioBrowser() {
             {stationBusy ? <Row label="loading stations…" /> : null}
             {stationList.map((t) => (
               <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
+                <span className="marker" aria-hidden>♫</span>
+                <span className="title">{t.title}</span>
+                <span className="dur">{(t.providerMeta?.countrycode as string) ?? t.genre ?? "LIVE"}</span>
                 <span
-                  className={"marker" + (prefs.isFavorite(t.path) ? " is-fav" : "")}
+                  className={"radio-star" + (prefs.isFavorite(t.path) ? " is-fav" : "")}
                   onClick={(e) => {
                     e.stopPropagation();
                     prefs.toggleFavorite(t.path);
                   }}
                   role="button"
-                  aria-label="Favorite"
+                  aria-label={prefs.isFavorite(t.path) ? "Remove favorite" : "Favorite station"}
                 >
-                  {prefs.isFavorite(t.path) ? "★" : ""}
+                  {prefs.isFavorite(t.path) ? "★" : "☆"}
                 </span>
-                <span className="title">{t.title}</span>
-                <span className="dur">{(t.providerMeta?.countrycode as string) ?? t.genre ?? "LIVE"}</span>
               </div>
             ))}
             {!stationBusy && stationList.length === 0 ? (
@@ -285,7 +298,7 @@ export default function RadioBrowser() {
       <div className="footer">
         <div className="help-row">
           <span>
-            <span className="key-pill">tip</span> tap a station to play · ★ pins / favorites
+            <span className="key-pill">tip</span> tap a station to play · ☆ / ★ pins / favorites
           </span>
         </div>
       </div>

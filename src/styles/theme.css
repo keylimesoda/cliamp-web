@@ -389,6 +389,21 @@ button.btn-primary {
   font-variant-numeric: tabular-nums;
 }
 
+.radio-star {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.radio-star.is-fav {
+  color: var(--favorite);
+}
+
 /* ---- plugin toggles: the whole row is the touch control ---- */
 .plugin-row {
   width: 100%;
