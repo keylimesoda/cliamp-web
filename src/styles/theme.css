@@ -404,6 +404,38 @@ button.btn-primary {
   color: var(--favorite);
 }
 
+.save-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.save-toggle.is-fav {
+  color: var(--favorite);
+}
+
+.favorites-section-label {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  padding: 0 0.6rem;
+  color: var(--text-dim);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.favorite-kind {
+  min-width: 4.5em;
+  text-align: right;
+  color: var(--text-dim);
+}
+
 /* ---- plugin toggles: the whole row is the touch control ---- */
 .plugin-row {
   width: 100%;

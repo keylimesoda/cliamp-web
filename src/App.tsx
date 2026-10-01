@@ -5,8 +5,9 @@ import NowPlaying from "./components/NowPlaying";
 import RadioBrowser from "./components/RadioBrowser";
 import PodcastBrowser from "./components/PodcastBrowser";
 import ServersScreen from "./components/ServersScreen";
-import LocalScreen from "./components/LocalScreen";
+import FavoritesScreen from "./components/FavoritesScreen";
 import PluginsScreen from "./components/PluginsScreen";
+import type { PodcastShow } from "./providers/podcast";
 import "./providers/radio"; // side-effect: registers the radio provider
 import "./providers/podcast"; // side-effect: registers the podcast provider
 import "./providers/navidrome"; // side-effect: registers the navidrome provider
@@ -16,29 +17,35 @@ import "./providers/audiobookshelf"; // side-effect: registers audiobookshelf
 import "./providers/lyrion"; // side-effect: registers lyrion (LMS)
 import { applyTheme } from "./themes/engine";
 
-type Screen = "now" | "radio" | "podcast" | "servers" | "local" | "plugins";
+type Screen = "now" | "radio" | "podcast" | "servers" | "favorites" | "plugins";
 
 const NAV = [
   { id: "now" as const, label: "Now Playing", compactLabel: "NOW", icon: "\uf001" },
   { id: "radio" as const, label: "Radio", compactLabel: "RADIO", icon: "\uf1eb" },
   { id: "podcast" as const, label: "Podcasts", compactLabel: "PODS", icon: "\uf130" },
   { id: "servers" as const, label: "Servers", compactLabel: "SERVERS", icon: "\uf1c0" },
-  { id: "local" as const, label: "Local", compactLabel: "LOCAL", icon: "\uf07c" },
+  { id: "favorites" as const, label: "Favorites", compactLabel: "FAVS", icon: "\uf005" },
   { id: "plugins" as const, label: "Plugins", compactLabel: "PLUGINS", icon: "\uf1e6" },
 ];
 
-function renderScreen(screen: Screen, immersive: boolean, setImmersive: (enabled: boolean) => void) {
+function renderScreen(
+  screen: Screen,
+  immersive: boolean,
+  setImmersive: (enabled: boolean) => void,
+  podcastTarget: PodcastShow | null,
+  openPodcast: (show: PodcastShow) => void,
+) {
   switch (screen) {
     case "now":
       return <NowPlaying immersive={immersive} onImmersiveChange={setImmersive} />;
     case "radio":
       return <RadioBrowser />;
     case "podcast":
-      return <PodcastBrowser />;
+      return <PodcastBrowser initialShow={podcastTarget} />;
     case "servers":
       return <ServersScreen />;
-    case "local":
-      return <LocalScreen />;
+    case "favorites":
+      return <FavoritesScreen onOpenPodcast={openPodcast} />;
     case "plugins":
       return <PluginsScreen />;
   }
@@ -50,6 +57,7 @@ export default function App() {
   const theme = usePlayerStore((s) => s.theme);
   const [screen, setScreen] = useState<Screen>("now");
   const [immersive, setImmersive] = useState(false);
+  const [podcastTarget, setPodcastTarget] = useState<PodcastShow | null>(null);
 
   useEffect(() => {
     void boot();
@@ -73,7 +81,17 @@ export default function App() {
 
   return (
     <>
-      {renderScreen(screen, immersive, setImmersive)}
+      {renderScreen(
+        screen,
+        immersive,
+        setImmersive,
+        podcastTarget,
+        (show) => {
+          setPodcastTarget(show);
+          setImmersive(false);
+          setScreen("podcast");
+        },
+      )}
       {!immersive || screen !== "now" ? <nav className="app-nav" aria-label="Primary">
         {NAV.map((n) => (
           <button
@@ -81,6 +99,7 @@ export default function App() {
             className={screen === n.id ? "btn-accent" : ""}
             onClick={() => {
               setImmersive(false);
+              if (n.id === "podcast") setPodcastTarget(null);
               setScreen(n.id);
             }}
             aria-current={screen === n.id ? "page" : undefined}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { radioBrowse, type RadioCountry, type RadioTag } from "../providers/radio";
 import { usePlayerStore } from "../store/player";
 import { useRadioPrefs } from "../store/radioPrefs";
+import { useFavoritesStore } from "../store/favorites";
 import type { Track } from "../core/types";
 import { useAsync } from "./useAsync";
 
@@ -61,12 +62,25 @@ function Row({ label, hint, onClick }: { label: string; hint?: string; onClick?:
 export default function RadioBrowser() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const prefs = useRadioPrefs();
+  const favorites = useFavoritesStore();
   const [view, setView] = useState<View>({ kind: "home" });
   const [query, setQuery] = useState("");
   const [countryName, setCountryName] = useState("");
 
   const play = (t: Track) => {
     void playTrack(t, 0);
+  };
+
+  const isStationFavorite = (t: Track) =>
+    favorites.tracks.some((x) => x.path === t.path) || prefs.isFavorite(t.path);
+
+  const toggleStationFavorite = (t: Track) => {
+    const savedTrack = favorites.tracks.some((x) => x.path === t.path);
+    const legacySaved = prefs.isFavorite(t.path);
+
+    if (savedTrack) favorites.toggle(t);
+    if (legacySaved) prefs.toggleFavorite(t.path);
+    if (!savedTrack && !legacySaved) favorites.toggle(t);
   };
 
   const builtinsKey = view.kind === "home" ? "builtins" : "";
@@ -197,15 +211,15 @@ export default function RadioBrowser() {
                   <span className="title">{t.title}</span>
                   <span className="dur">{t.genre ?? "LIVE"}</span>
                   <span
-                    className={"radio-star" + (prefs.isFavorite(t.path) ? " is-fav" : "")}
+                    className={"radio-star" + (isStationFavorite(t) ? " is-fav" : "")}
                     onClick={(e) => {
                       e.stopPropagation();
-                      prefs.toggleFavorite(t.path);
+                      toggleStationFavorite(t);
                     }}
                     role="button"
-                    aria-label={prefs.isFavorite(t.path) ? "Remove favorite" : "Favorite station"}
+                    aria-label={isStationFavorite(t) ? "Remove favorite" : "Favorite station"}
                   >
-                    {prefs.isFavorite(t.path) ? "★" : "☆"}
+                    {isStationFavorite(t) ? "★" : "☆"}
                   </span>
                 </div>
               ))}
@@ -276,15 +290,15 @@ export default function RadioBrowser() {
                 <span className="title">{t.title}</span>
                 <span className="dur">{(t.providerMeta?.countrycode as string) ?? t.genre ?? "LIVE"}</span>
                 <span
-                  className={"radio-star" + (prefs.isFavorite(t.path) ? " is-fav" : "")}
+                  className={"radio-star" + (isStationFavorite(t) ? " is-fav" : "")}
                   onClick={(e) => {
                     e.stopPropagation();
-                    prefs.toggleFavorite(t.path);
+                    toggleStationFavorite(t);
                   }}
                   role="button"
-                  aria-label={prefs.isFavorite(t.path) ? "Remove favorite" : "Favorite station"}
+                  aria-label={isStationFavorite(t) ? "Remove favorite" : "Favorite station"}
                 >
-                  {prefs.isFavorite(t.path) ? "★" : "☆"}
+                  {isStationFavorite(t) ? "★" : "☆"}
                 </span>
               </div>
             ))}

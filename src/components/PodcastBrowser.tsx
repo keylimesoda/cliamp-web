@@ -28,12 +28,16 @@ function Row({ label, hint, onClick, marker }: { label: string; hint?: string; o
  * episodes (RSS). Tapping an episode loads the show's episodes into the
  * playback playlist and plays it. Shows can be subscribed (persisted).
  */
-export default function PodcastBrowser() {
+interface PodcastBrowserProps {
+  initialShow?: PodcastShow | null;
+}
+
+export default function PodcastBrowser({ initialShow = null }: PodcastBrowserProps) {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const loadPlaylist = usePlayerStore((s) => s.loadPlaylist);
   const favorites = useFavoritesStore();
   const prefs = usePodcastPrefs();
-  const [view, setView] = useState<View>({ kind: "home" });
+  const [view, setView] = useState<View>(() => initialShow ? { kind: "show", show: initialShow } : { kind: "home" });
   const [query, setQuery] = useState("");
 
   const chart = useAsync(
@@ -141,9 +145,20 @@ export default function PodcastBrowser() {
               <div className="list">
                 {prefs.subs.map((s) => (
                   <div className="row" key={s.feedUrl} onClick={() => openShow({ collectionId: s.collectionId ?? 0, name: s.name, feedUrl: s.feedUrl, artworkUrl: s.artworkUrl })} role="button" aria-label={s.name}>
-                    <span className="marker is-fav" aria-hidden>♥</span>
+                    <span className="marker" aria-hidden>▸</span>
                     <span className="title">{s.name}</span>
                     <span className="dur">sub</span>
+                    <span
+                      className="save-toggle is-fav"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        prefs.toggleSub(s);
+                      }}
+                      role="button"
+                      aria-label="Unsubscribe"
+                    >
+                      ♥
+                    </span>
                   </div>
                 ))}
               </div>
@@ -159,19 +174,20 @@ export default function PodcastBrowser() {
               <Row label="Top Shows (US)" hint="chart" />
               {showList.map((s) => (
                 <div className="row" key={s.collectionId} onClick={() => openShow(s)} role="button" aria-label={s.name}>
+                  <span className="marker" aria-hidden>▸</span>
+                  <span className="title">{s.name}</span>
+                  <span className="dur">{s.genre ?? ""}</span>
                   <span
-                    className={"marker" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
+                    className={"save-toggle" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (s.feedUrl) prefs.toggleSub({ feedUrl: s.feedUrl, name: s.name, collectionId: s.collectionId, artworkUrl: s.artworkUrl });
                     }}
                     role="button"
-                    aria-label="Subscribe"
+                    aria-label={prefs.isSubscribed(s.feedUrl ?? "") ? "Unsubscribe" : "Subscribe"}
                   >
-                    {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : ""}
+                    {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : "♡"}
                   </span>
-                  <span className="title">{s.name}</span>
-                  <span className="dur">{s.genre ?? ""}</span>
                 </div>
               ))}
               {chart.busy ? <Row label="loading top shows…" /> : null}
@@ -196,19 +212,20 @@ export default function PodcastBrowser() {
             {listBusy ? <Row label="loading shows…" /> : null}
             {showList.map((s) => (
               <div className="row" key={s.collectionId} onClick={() => openShow(s)} role="button" aria-label={s.name}>
+                <span className="marker" aria-hidden>▸</span>
+                <span className="title">{s.name}</span>
+                <span className="dur">{s.genre ?? ""}</span>
                 <span
-                  className={"marker" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
+                  className={"save-toggle" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (s.feedUrl) prefs.toggleSub({ feedUrl: s.feedUrl, name: s.name, collectionId: s.collectionId, artworkUrl: s.artworkUrl });
                   }}
                   role="button"
-                  aria-label="Subscribe"
+                  aria-label={prefs.isSubscribed(s.feedUrl ?? "") ? "Unsubscribe" : "Subscribe"}
                 >
-                  {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : ""}
+                  {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : "♡"}
                 </span>
-                <span className="title">{s.name}</span>
-                <span className="dur">{s.genre ?? ""}</span>
               </div>
             ))}
             {!listBusy && showList.length === 0 ? <Row label="no shows" /> : null}
@@ -229,12 +246,12 @@ export default function PodcastBrowser() {
                 <span className="title">{t.title}</span>
                 <span className="dur">{t.durationSecs ? fmtDur(t.durationSecs) : ""}</span>
                 <span
-                  className={"marker" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
+                  className={"save-toggle" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
                   role="button"
-                  aria-label="favorite"
+                  aria-label={favorites.tracks.some((x) => x.path === t.path) ? "Remove favorite" : "Favorite episode"}
                   onClick={(e) => { e.stopPropagation(); favorites.toggle(t); }}
                 >
-                  ★
+                  {favorites.tracks.some((x) => x.path === t.path) ? "★" : "☆"}
                 </span>
               </div>
             ))}
@@ -246,7 +263,7 @@ export default function PodcastBrowser() {
       <div className="footer">
         <div className="help-row">
           <span>
-            <span className="key-pill">tip</span> tap an episode to play · ♥ subscribes
+            <span className="key-pill">tip</span> tap to open / play · ♡ / ♥ subscribes · ☆ / ★ favorites
           </span>
         </div>
       </div>
