@@ -122,6 +122,7 @@ export default function NowPlaying() {
             ))}
           </div>
           <div className="help-row">
+            <button className="key-pill" onClick={() => s.cyclePreset(-1)} aria-label="Previous EQ preset">EQ ◀</button>
             <span className="key-pill" onClick={() => s.cyclePreset()} role="button">
               EQ {s.eqPreset}
             </span>
@@ -147,6 +148,15 @@ export default function NowPlaying() {
             <span className="key-pill" onClick={() => setShowLyrics((v) => !v)} role="button">
               Lyrics {showLyrics ? "On" : "Off"}
             </span>
+            {s.tracks.length > 1 ? <button className="key-pill" onClick={s.reversePlaylist}>Reverse list</button> : null}
+            {s.track?.provider === "navidrome" ? (
+              <label className="rating-control">Rating
+                <select aria-label="Track rating" value={s.track.rating ?? 0} disabled={s.ratingBusy}
+                  onChange={(e) => void s.setTrackRating(Number(e.target.value))}>
+                  {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n ? `★ ${n}` : "Unrated"}</option>)}
+                </select>
+              </label>
+            ) : null}
           </div>
           <DragMeter
             className="meter-green"

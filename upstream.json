@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/bjarneo/cliamp",
+  "release": "v2.4.0",
+  "commit": "a8386f83cf0d3a0c71cda7b3cf1288eea1e3aaef",
+  "checkedAt": "2026-11-05",
+  "webBaseCommit": "6a954b9",
+  "audit": "docs/feature-parity-v2.4.0.md",
+  "scope": "Selected browser-compatible changes; the audit records remaining parity gaps."
+}

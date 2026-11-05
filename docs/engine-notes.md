@@ -1,48 +1,52 @@
 # Audio engine notes
 
-## Cross-origin taint (verified in Chromium, 2026-09-30)
+The web engine is an adaptation of cliamp, not the native audio backend.
+See the [v2.4.0 parity audit](feature-parity-v2.4.0.md#playback-and-audio).
 
-A cross-origin `<audio>` source **without CORS headers** plays, but the browser
-zero-fills the entire downstream Web Audio subgraph: `MediaElementAudioSource`
-→ worklet inputs, `AnalyserNode` reads, everything. The audio is audible only
-on paths that do not "read" the data (plain GainNode → destination).
+## Processing and CORS
 
-Consequences (engine design, `src/core/audio/engine.ts`):
+CORS-permitting media uses a MediaElementAudioSource feeding the WSOLA worklet,
+ten peaking biquads (70–16k Hz, Q 1.4), an analyser tap, volume, and stereo or
+mono output. Settings configured before graph creation are applied when the
+graph initializes. The worklet URL resolves against `document.baseURI`, so
+`/cliamp-web/` deployments load `/cliamp-web/worklets/wsola.js`.
 
-- `load()` sets `crossOrigin="anonymous"` first. CORS-permitting servers get
-  the **full chain**: WSOLA worklet (speed 0.25–2.0x) + analyser (visualizer).
-- On failure it retries once without `crossOrigin` (tainted mode) and routes
-  the element through a bypass gain around the worklet. Audio plays; speed
-  and visualizer are unavailable for that source. The stale CORS error event
-  is swallowed by a one-shot `staleError` flag (it can fire after the
-  fallback starts playing).
-- `radio.cliamp.stream` (built-in channels + streams.m3u) sends
-  `Access-Control-Allow-Origin: *` → full chain.
-- Radio-browser stations: CORS depends on the station server; expect a mix.
-  Stations without CORS still play (tainted path), without speed/visualizer.
-- `armGapless` uses `fetch` (needs CORS to read bytes) — gapless preload only
-  works for CORS-permitting finite sources; otherwise the plain element end
-  fires and the store advances normally.
+A cross-origin media element without CORS cannot be made audible by routing
+its MediaElementAudioSource around a worklet: the browser silences the source
+itself. The old engine's bypass claim was incorrect. The fallback now uses a
+second audio element that is never connected to Web Audio. It supports native
+media playback, element volume (at most unity) and element playbackRate, but
+not the EQ, analyser or mono graph. Permission/activation and aborted loads
+are not retried as CORS failures. Source/load/preload generations prevent late
+callbacks from replacing a newer request.
 
-## Verified behaviors (browser smoke, real Chromium)
+## Track transitions
 
-- Live stream through worklet → 10 biquads → analyser: position advances
-  1:1, 10-band spectrum matches content (bass-heavy lofi profile), pause
-  honored (position arithmetic), speed/EQ/mono toggles apply, zero console
-  errors.
-- Gapless (5 s WAVs): A→B handover at t=5.00 s with no silence (band energy
-  continuous across the boundary), track identity follows the buffer, clean
-  stop when the list is exhausted.
-- Tainted (cross-origin, no CORS): element plays through the bypass, position
-  advances, analyser reads zero, no spurious error callback, clean stop.
+Finite, CORS-readable sources with known metadata durations of at most ten
+minutes can be fetched/decoded for a best-effort next-track bridge. Encoded
+downloads are capped at 32 MiB. Preloads are invalidated on track, seek and
+order changes. Both normal media and decoded buffers enter the same DSP
+graph. A natural end without a preload still advances through the playlist;
+successful promotions consume the play-next queue once. The end of a decoded
+bridge also reports completion, even if another preload is unavailable.
 
-## WSOLA parity
+This does not establish sample-accurate gapless behavior. Native MP3 delay/
+padding trimming is not implemented. Non-1× clock alignment, worklet drain,
+source buffer sizing and audible track boundaries need further measurement.
+Do not infer those properties from the existence of the WSOLA algorithm.
 
-`public/worklets/wsola.js` mirrors `cliamp/player/speed.go` (wsolaFrame):
-frame = [crossfade 512][direct 3072] = 3584 out samples per frame; tail
-(last 512 of the 4096 source window) is only ever crossfaded, never emitted;
-cursor advances 3584 × speed; offset search = normalized cross-correlation
-of the saved tail vs candidate heads, ±1024, coarse stride 8 keeping top 8,
-full-resolution refinement, fallback to expected. One `Wsola` instance per
-channel in the worklet (per-channel matching; stereo preserved end-to-end).
-`reset` message clears per-track state (no cross-track tail crossfade).
+## Verification on November 5, 2026
+
+`src/core/audio/engine.test.ts` covers deployment subpaths, fallback
+routing, stale load/preload replies, permission errors, promotion and bridge
+completion. Player/model tests cover queue consumption, natural advancement,
+late source resolution, reversal and repeat behavior. DSP tests exercise the
+standalone WSOLA algorithm and spectrum logic.
+
+`tests/browser-smoke.mjs` runs Chromium with fictional stations, synthetic
+WAVs and fictional server credentials, inside omabox. It checks a GitHub
+Pages-style subpath, A→B→C playback, pause, reversal, persisted visualizer
+names, a cross-origin/no-CORS media request, and accepted/rejected ratings
+at 804×638 CSS pixels with touch and DPR 1.96. Audio is muted: these checks
+prove browser media progression and state, not audible output, DSP quality,
+sample-accurate transitions, production server compatibility or Tesla hardware.

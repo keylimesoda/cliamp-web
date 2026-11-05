@@ -4,8 +4,9 @@ cliamp plugins are Lua 5.1 scripts that hook playback events and can control
 the player. This port ships a **compact, self-contained Lua 5.1 interpreter in
 TypeScript** (lexer + parser + tree-walk VM under `src/lua/`) — no WASM, no
 emscripten, no external runtime. The bundled plugins and the plugin API are
-ported for full parity; the differences specific to a browser PWA are
-documented below.
+adapted for a subset of behavior. This is not full native plugin parity.
+The [v2.4.0 audit](feature-parity-v2.4.0.md#plugins-and-platform-integration)
+records API, event, sandbox, interpreter and UI gaps.
 
 ## Architecture
 
@@ -27,7 +28,7 @@ documented below.
   through a bridge, loads plugins, dispatches events, and exposes state to the
   UI.
 
-## API surface (parity with cliamp)
+## Implemented API surface and stubs
 
 - `plugin.register({name, type, version, description, permissions})` → `p`
 - `p:on(event, cb)`, `p:config(key)`, `p:publish(topic, payload, opts?)`,
@@ -38,8 +39,8 @@ documented below.
   `set_speed`, `seek`, `set_eq_preset`, `set_eq_band`). **Control requires the
   `control` permission** (enforced; a plugin without it gets a logged denial).
 - `cliamp.track` — read (`title`, `artist`, `album`, `genre`, `path`, `year`,
-  `track_number`, `duration_secs`, `is_stream`, `is_live`).
-- `cliamp.queue`, `cliamp.http.post/get`, `cliamp.json.encode/decode`,
+  `track_number`, `duration_secs`, `is_stream`, `is_live`, `album_art_url`).
+- `cliamp.http.post/get`, `cliamp.json.encode/decode`,
   `cliamp.crypto.md5`, `cliamp.store.get/set`, `cliamp.log.{debug,info,warn,
   error}`, `cliamp.message(text, dur)`, `cliamp.notify(title, artist?)`.
 - Host globals `plugin`, `cliamp`, `utf8`. `prog.Send` is **not** exposed
@@ -65,6 +66,10 @@ Vendored from cliamp and loaded at boot:
   configured).
 
 The **Plugins** screen lists them with enable/disable and a live log.
+Toggle choices are not persisted; there is no plugin source import/install UI.
+`cliamp.queue`, image/layout/ui/vis APIs and custom visualizer hooks are absent.
+`p:publish` only logs; stored bindings and commands are never invoked.
+Native event payloads, repeat/shuffle types and band indexing still differ.
 
 ## Web adaptations (intentional differences)
 

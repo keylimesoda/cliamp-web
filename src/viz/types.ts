@@ -15,6 +15,7 @@
  */
 
 export interface VizColors {
+  accent?: string;
   /** Monochrome visualizer foreground (theme text). */
   text: string;
   dim: string;

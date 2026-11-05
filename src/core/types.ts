@@ -34,6 +34,8 @@ export interface Track {
   bookmark?: boolean;
   /** Cross-playlist favorite (heart). */
   favorite?: boolean;
+  /** Navidrome user rating, 0 (unrated) through 5. */
+  rating?: number;
 }
 
 export type RepeatMode = "off" | "all" | "one";

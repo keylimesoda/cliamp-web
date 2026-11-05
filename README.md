@@ -4,11 +4,16 @@
 from a car's in-car browser — landscape-first, big targets, no keyboard, no
 backend.
 
-A complete port of [cliamp](https://github.com/keylimesoda/cliamp) (the Go +
+A browser adaptation of [cliamp](https://github.com/bjarneo/cliamp) (the Go +
 Bubbletea terminal player) to a static PWA: React + TypeScript + Vite +
 zustand, with a real-time Web Audio engine (spectral visualizer, 10-band EQ,
-pitch/time-stretch, gapless-style transitions) and a **Lua plugin system**
-running in the browser.
+pitch/time-stretch, gapless-style transitions) and a **subset of the Lua hook API** running in the browser.
+
+**Web v0.2.0 tracks selected changes from cliamp v2.4.0** (November 5, 2026).
+This is an independent implementation with substantial remaining gaps, not a
+complete port. See the [feature parity audit](docs/feature-parity-v2.4.0.md) for
+implemented behavior, broken provider contracts, missing features and evidence.
+The exact native release and commit are recorded in [upstream.json](upstream.json).
 
 **Live: [keylimesoda.github.io/cliamp-web](https://keylimesoda.github.io/cliamp-web/)**
 
@@ -24,20 +29,24 @@ running in the browser.
 ## Features
 
 - **Now Playing** — touch transport (prev / play-pause / next), seek bar,
-  10-band EQ with presets, pitch/time-stretch, mono, shuffle/repeat, volume,
-  and **32 real-time visualizers** — tap the visualizer to cycle modes.
+  built-in 10-band EQ presets, mono, shuffle/repeat, volume,
+  and **34 real-time visualizer modes** — tap the visualizer to cycle modes.
+- **v2.4 updates** — YinYang and Ethereal visualizers, previous EQ preset,
+  playlist reversal, current-track Navidrome ratings, radio channel song lists
+  and listener counts, and corrected lyrics/Plex metadata.
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
   - **Podcasts** — Apple top charts, search, RSS enclosures.
-  - **Self-hosted** — Navidrome (Subsonic), Jellyfin, Emby, Plex,
-    Audiobookshelf, Lyrion (LMS), with in-app server setup and browse UIs.
+  - **Self-hosted** — Navidrome (Subsonic), with basic Plex code. Jellyfin,
+    Emby, Audiobookshelf and Lyrion have UI/client scaffolding but known
+    contract/setup gaps; see the audit before relying on them.
 - **History & favorites** — recent plays (deduped) and a favorites list,
   persisted locally.
-- **Lyrics** — LRC sidecars + LRCLIB lookup, synced to playback.
+- **Lyrics** — LRCLIB lookup and LRC parsing, synced to playback.
 - **Lua plugins** — a Lua 5.1-style interpreter in TypeScript; plugins hook
   `track.change`, `playback.state`, `track.scrobble`, `app.start`, control
   playback, read tracks, and surface status messages. Four bundled:
-  `auto-eq` (genre→EQ preset), `now-playing` (status file), `status-messages`,
+  `auto-eq` (genre→EQ preset), `now-playing` (browser storage), `status-messages`,
   `webhook`. See [docs/lua-plugins.md](docs/lua-plugins.md).
 - **Themes** — 22 vendored cliamp themes as runtime CSS variables.
 - **PWA** — installable, service-worker app-shell caching, fullscreen
@@ -45,8 +54,9 @@ running in the browser.
 
 ## Visualizers
 
-All 32 visualizer modes from the original cliamp, ported to a canvas
-character-grid renderer. **Tap/click the visualizer to cycle** (the original's
+The 34 named visualizer modes from cliamp v2.4.0, adapted to a canvas
+character-grid renderer. Algorithms and analysis are not all identical to native
+cliamp (the Stereo meters use a mono tap). **Tap/click the visualizer to cycle** (the original's
 `v` key); the choice persists. Rendering runs at ~60 FPS while playing and
 throttles to ~5 FPS when idle.
 
@@ -58,11 +68,13 @@ throttles to ~5 FPS when idle.
 | ![Logo](docs/screenshots/viz/logo.png) | ![Scope](docs/screenshots/viz/scope.png) |
 | ![Sand](docs/screenshots/viz/sand.png) | ![Firework](docs/screenshots/viz/firework.png) |
 | ![Bars](docs/screenshots/viz/bars.png) | |
+| ![YinYang](docs/screenshots/v2.4.0/yinyang-804x638.png) | ![Ethereal](docs/screenshots/v2.4.0/ethereal-804x638.png) |
 
 `Bars` `BarsDot` `Rain` `BarsOutline` `Bricks` `Columns` `ClassicPeak` `Wave`
 `Scatter` `Flame` `Retro` `Pulse` `Matrix` `Binary` `Sakura` `Firework`
 `Bubbles` `Logo` `Terrain` `Scope` `Heartbeat` `Butterfly` `Ascii` `Firefly`
 `Mosaic` `Sand` `Geyser` `ClassicLED` `Stereo` `Mirror` `Omarchy` `RedSector`
+`YinYang` `Ethereal`
 (plus `None` to hide the visualizer).
 
 ## Quickstart
@@ -82,7 +94,7 @@ npm run preview    # → http://localhost:4173
 Tests:
 
 ```sh
-npm test           # vitest — engine, playlist, spectrum, wsola, Lua VM
+npm test           # vitest — engine, player, providers, lyrics, playlist, DSP, Lua, viz
 ```
 
 ## Deployment
@@ -106,19 +118,22 @@ localStorage and persists between visits.
 
 Plugins are standard Lua files with a `plugin.register` / `p:on(event, fn)`
 API plus `cliamp.*` host functions (player read/control, track info, http,
-fs→localStorage, json, md5, timers, messages). The VM is a self-contained
+fs→localStorage, json, md5, messages). The VM is a self-contained
 tree-walk interpreter (closures/upvalues, `:` methods, varargs, multi-value
 returns, `string`/`table`/`math` libs, `pcall`/metatables) — no WASM.
 
-`cliamp.exec` has no web equivalent (a PWA has no shell) and is documented as
-unsupported; `cliamp.http.post` is fire-and-forget. Full details and the
+`cliamp.exec` has no web equivalent (a PWA has no shell). HTTP is
+fire-and-forget; timers, pub/sub, commands and custom visualizer APIs are
+incomplete or unsupported. Full details and the
 bundled plugin list: [docs/lua-plugins.md](docs/lua-plugins.md).
 
 ## Out of scope (documented, not dropped)
 
-Tidal, Qobuz, Yandex Music, NetEase, SoundCloud, and Mixcloud require account
-OAuth, server-side yt-dlp, or non-CORS APIs — incompatible with a static
-zero-backend PWA. Each is named and explained in
+Spotify, YouTube/YouTube Music, SoundCloud, Mixcloud, NetEase, Yandex Music,
+Qobuz, Tidal, Bandcamp, Bilibili, Xiaoyuzhou and Telegram have no browser
+provider here. Their native authentication/extraction/client implementations
+are not part of this static PWA. Browser adapters or a companion need separate
+design. See
 [docs/providers-3.md](docs/providers-3.md).
 
 ## Architecture
@@ -128,7 +143,7 @@ src/
   core/        audio engine, playlist, spectrum, md5, types
   providers/   radio, podcast, navidrome, jellyfin/emby, plex, audiobookshelf, lyrion
   lua/         lexer, parser, VM, plugin host, bundled plugins
-  viz/         32 character-grid visualizers, canvas drawer, registry
+  viz/         34 character-grid visualizer adaptations, canvas drawer, registry
   store/       player, servers, history, plugins, viz (zustand)
   components/  NowPlaying, RadioBrowser, PodcastBrowser, ServerBrowser,
                ServersScreen, PluginsScreen, LyricsOverlay, Visualizer, …
@@ -138,3 +153,7 @@ docs/          engine-notes, lua-plugins, providers-3, screenshots
 
 The audio engine (Web Audio + a worklet for time-stretch) is covered in
 [docs/engine-notes.md](docs/engine-notes.md).
+
+Browser regression checks at a Tesla-sized touch viewport are documented in
+the [audit reproduction steps](docs/feature-parity-v2.4.0.md#reproducing-this-audits-checks).
+They use fictional data inside omabox; an actual Tesla has not been retested.

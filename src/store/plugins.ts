@@ -46,6 +46,7 @@ function trackToLua(t: Track) {
     duration_secs: t.durationSecs ?? 0,
     is_stream: !!t.stream,
     is_live: !!t.live,
+    album_art_url: t.artUrl ?? "",
   });
 }
 
@@ -82,6 +83,7 @@ export const usePluginStore = create<PluginState>()((set, get) => ({
                 durationSecs: t.durationSecs ?? 0,
                 isStream: !!t.stream,
                 isLive: !!t.live,
+                albumArtUrl: t.artUrl ?? "",
               }
             : null,
           state: s.state,
@@ -108,7 +110,7 @@ export const usePluginStore = create<PluginState>()((set, get) => ({
           case "toggle_mono": st.setMono(!st.mono); break;
           case "set_volume": if (Number.isFinite(num0)) st.setVolume(num0); break;
           case "set_speed": if (Number.isFinite(num0)) st.setSpeed(num0); break;
-          case "seek": if (Number.isFinite(num0)) st.seek(num0); break;
+          case "seek": if (Number.isFinite(num0)) st.seek(st.position + num0); break;
           case "set_eq_preset": st.applyPreset(str0); break;
           case "set_eq_band": {
             const band = Math.floor(num0);

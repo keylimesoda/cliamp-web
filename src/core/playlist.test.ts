@@ -7,6 +7,56 @@ function tracks(n: number): Track[] {
 }
 
 describe("Playlist", () => {
+  it("reverses while retaining the playing track and queue identities", () => {
+    const p = new Playlist();
+    p.load(tracks(4), 1);
+    p.queueToggle(3);
+    p.reverse();
+    expect(p.displayOrder().map((i) => p.track(i)?.path)).toEqual(["t3", "t2", "t1", "t0"]);
+    expect(p.currentTrack?.path).toBe("t1");
+    expect(p.displayAt(p.currentIndex)).toBe(2);
+    p.next(); expect(p.currentTrack?.path).toBe("t3");
+    p.next(); expect(p.currentTrack?.path).toBe("t2");
+  });
+  it("retains shuffled play order on reversal and restores reversed order when shuffle turns off", () => {
+    const p = new Playlist();
+    p.load(tracks(6), 2); p.setShuffle("on");
+    const order = p.displayOrder().map((i) => p.track(i)?.path);
+    p.queueToggle(3);
+    const queued = p.track(p.queueIndices()[0])?.path;
+    p.reverse();
+    expect(p.displayOrder().map((i) => p.track(i)?.path)).toEqual(order);
+    expect(p.track(p.queueIndices()[0])?.path).toBe(queued);
+    expect(p.currentTrack?.path).toBe("t2");
+    p.setShuffle("off");
+    expect(p.displayOrder().map((i) => p.track(i)?.path)).toEqual(["t5", "t4", "t3", "t2", "t1", "t0"]);
+  });
+  it("remaps queue indices and preserves current playback when earlier rows are removed", () => {
+    const p = new Playlist();
+    p.load(tracks(5), 3); p.queueToggle(4); p.removeDisplay(1);
+    expect(p.currentTrack?.path).toBe("t3");
+    p.next(); expect(p.currentTrack?.path).toBe("t4");
+  });
+  it("notifies when the final row is removed", () => {
+    const p = new Playlist(); p.load(tracks(1));
+    let notified = 0; p.onDirty(() => notified++);
+    p.removeDisplay(0); expect(p.currentIndex).toBe(-1); expect(notified).toBe(1);
+  });
+  it("keeps prepended tracks in order without moving the current identity", () => {
+    const p = new Playlist(); p.load(tracks(3), 1);
+    p.add([{ path: "a", title: "A" }, { path: "b", title: "B" }], true);
+    expect(p.displayOrder().map((i) => p.track(i)?.path)).toEqual(["a", "b", "t0", "t1", "t2"]);
+    expect(p.currentTrack?.path).toBe("t1");
+  });
+  it("refuses stale queue undo after a later queue edit", () => {
+    const p = new Playlist(); p.load(tracks(3));
+    p.queueToggle(1); p.queueClear(); p.queueToggle(2); p.undo();
+    expect(p.queueIndices()).toEqual([2]);
+  });
+  it("keeps a shuffled empty playlist stopped", () => {
+    const p = new Playlist(); p.setShuffle("on");
+    expect(p.currentIndex).toBe(-1); expect(p.currentTrack).toBeUndefined();
+  });
   it("loads and navigates sequentially", () => {
     const p = new Playlist();
     p.load(tracks(3));

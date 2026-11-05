@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { radioBrowse, type RadioCountry, type RadioTag } from "../providers/radio";
-import { usePlayerStore } from "../store/player";
+import { useEffect, useRef, useState } from "react";
+import { radioBrowse, RADIO_ORDER_LABELS, type RadioOrder, type RadioCountry, type RadioTag } from "../providers/radio";
+import { getEngine, usePlayerStore } from "../store/player";
 import { useRadioPrefs } from "../store/radioPrefs";
 import type { Track } from "../core/types";
 import { useAsync } from "./useAsync";
@@ -64,6 +64,32 @@ export default function RadioBrowser() {
   const [view, setView] = useState<View>({ kind: "home" });
   const [query, setQuery] = useState("");
   const [countryName, setCountryName] = useState("");
+  const [order, setOrder] = useState<RadioOrder>("votes");
+  const [channelBusy, setChannelBusy] = useState<string | null>(null);
+  const [channelError, setChannelError] = useState<string | null>(null);
+  const channelRequest = useRef(0);
+  useEffect(() => () => { channelRequest.current++; }, []);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { void radioBrowse.listenerCounts().then((c) => { if (active) setCounts(c); }).catch(() => {}); };
+    refresh();
+    const timer = window.setInterval(refresh, 300_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  const openChannel = async (channel: Track) => {
+    void getEngine()?.init().catch(() => {});
+    const request = ++channelRequest.current;
+    setChannelBusy(channel.path);
+    setChannelError(null);
+    try {
+      const tracks = await radioBrowse.channelTracks(channel);
+      if (request === channelRequest.current) await usePlayerStore.getState().loadPlaylist(tracks, 0, true);
+    } catch (e) {
+      if (request === channelRequest.current) setChannelError(e instanceof Error ? e.message : "Channel unavailable");
+    } finally { if (request === channelRequest.current) setChannelBusy(null); }
+  };
 
   const play = (t: Track) => {
     void playTrack(t, 0);
@@ -80,8 +106,8 @@ export default function RadioBrowser() {
   );
   const countryStations = useAsync<Track[]>(
     () =>
-      view.kind === "country" ? radioBrowse.stationsForCountry(view.code) : Promise.resolve([]),
-    view.kind === "country" ? "country:" + view.code : "",
+      view.kind === "country" ? radioBrowse.stationsForCountry(view.code, order) : Promise.resolve([]),
+    view.kind === "country" ? "country:" + view.code + order : "",
   );
   const tags = useAsync<RadioTag[]>(
     () => (view.kind === "tags" ? radioBrowse.listTags() : Promise.resolve([])),
@@ -89,8 +115,8 @@ export default function RadioBrowser() {
   );
   const tagStations = useAsync<Track[]>(
     () =>
-      view.kind === "tag" ? radioBrowse.stationsForTag(view.name) : Promise.resolve([]),
-    view.kind === "tag" ? "tag:" + view.name : "",
+      view.kind === "tag" ? radioBrowse.stationsForTag(view.name, order) : Promise.resolve([]),
+    view.kind === "tag" ? "tag:" + view.name + order : "",
   );
   const searchResults = useAsync<Track[]>(
     () =>
@@ -172,6 +198,13 @@ export default function RadioBrowser() {
       />
 
       {stationError ? <div className="status-row is-error">ERR: {stationError}</div> : null}
+      {channelError ? <div className="status-row is-error">ERR: {channelError}</div> : null}
+      {channelBusy ? <div className="status-row" role="status">Loading channel…</div> : null}
+      {(view.kind === "country" || view.kind === "tag") && (
+        <label>Order <select value={order} onChange={(e) => setOrder(e.target.value as RadioOrder)}>
+          {Object.entries(RADIO_ORDER_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select></label>
+      )}
 
       {view.kind === "home" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", flex: 1, minHeight: 0 }}>
@@ -192,10 +225,15 @@ export default function RadioBrowser() {
           <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0, display: "flex" }}>
             <div className="list" style={{ overflowY: "auto", flex: 1 }}>
               {(builtins.data ?? []).map((t) => (
-                <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
+                <div className="row" key={t.path} onClick={() => {
+                  if (t.providerMeta?.trackCount && t.providerMeta?.tracksUrl) void openChannel(t);
+                  else play(t);
+                }} role="button" aria-label={t.title}>
                   <span className="marker" aria-hidden>♫</span>
                   <span className="title">{t.title}</span>
-                  <span className="dur">{t.genre ?? "LIVE"}</span>
+                  <span className="dur">{t.providerMeta?.trackCount && t.providerMeta?.tracksUrl ? `${t.providerMeta.trackCount} songs` : t.genre ?? "LIVE"}
+                    {counts[String(t.providerMeta?.builtin)] !== undefined ? ` · ${counts[String(t.providerMeta?.builtin)]} listening` : ""}
+                  </span>
                 </div>
               ))}
               {builtins.busy ? <Row label="loading built-in channels…" /> : null}

@@ -18,6 +18,7 @@ function cssVar(name: string, fallback: string): string {
 
 function readColors(): VizColors {
   return {
+    accent: cssVar("--accent", "#7ec97e"),
     text: cssVar("--text", "#d8e8d8"),
     dim: cssVar("--text-dim", "#6a7a6a"),
     spectrumLow: cssVar("--spectrum-low", "#7ec97e"),
@@ -45,7 +46,7 @@ function vizData(): VizData {
 }
 
 /**
- * Visualizer — all 32 cliamp visualizer modes (plus None), rendered as
+ * Visualizer — 34 cliamp visualizer modes (plus None), rendered as
  * character grids on a canvas. Tap/click the area to cycle modes
  * (original "v" key); the choice persists.
  */
@@ -61,6 +62,7 @@ export default function Visualizer() {
     const entry = VISUALIZERS[index];
     if (!entry) return;
     const viz: Viz = entry.make();
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     viz.init?.(VIZ_COLS, VIZ_ROWS);
     let raf = 0;
     let last = performance.now();

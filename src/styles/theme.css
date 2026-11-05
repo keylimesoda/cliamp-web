@@ -221,6 +221,21 @@ button.btn-primary {
   font-size: var(--fs-xs);
   line-height: 1.5;
 }
+.help-row > .key-pill[role="button"], .help-row > button.key-pill {
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  cursor: pointer;
+}
+select {
+  min-height: var(--tap-min);
+  max-width: 100%;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+}
+.rating-control { display: flex; align-items: center; gap: var(--gap-sm); }
 
 /* ---- generic panel / card ---- */
 .panel {
@@ -241,7 +256,7 @@ button.btn-primary {
   min-height: 0; /* allow flex children to scroll */
 }
 .row {
-  display: grid;
+  display: flex;
   align-items: center;
   gap: var(--gap-sm);
   min-height: var(--tap-min);
@@ -281,6 +296,7 @@ button.btn-primary {
   font-size: var(--fs-sm);
 }
 .row .title {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -416,7 +432,7 @@ button.btn-primary {
 
 .visualizer {
   width: 100%;
-  height: clamp(90px, 16vw, 220px);
+  height: clamp(72px, 13vh, 180px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-sunken);
@@ -509,6 +525,12 @@ button.btn-primary {
 }
 
 /* ---- responsive tiers (recon §3: full / compact / minimal) ---- */
+/* Short car viewports keep the playlist and touch controls visible. */
+@media (max-height: 700px) {
+  .eq-bands { display: none; }
+  .visualizer { height: 72px; }
+  .nowplaying, .mix { gap: 0.2rem; }
+}
 /* minimal: very short viewports — drop visualizer + mix */
 @media (max-height: 420px) {
   .visualizer,

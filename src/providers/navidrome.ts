@@ -12,7 +12,7 @@ import type { Provider, ResolvedSource, Track } from "../core/types";
 import { useServers } from "../store/servers";
 import { registerProvider } from "./registry";
 
-const VERSION = "1.0.0";
+const VERSION = "1.16.1";
 const CLIENT = "cliamp";
 
 function authParams(user: string, password: string): URLSearchParams {
@@ -30,9 +30,7 @@ function authParams(user: string, password: string): URLSearchParams {
 }
 
 interface SubsonicEnvelope<T> {
-  status: "ok" | "failed";
-  version: string;
-  subsonic: T & { error?: { code: number; message: string } };
+  "subsonic-response": T & { status: "ok" | "failed"; error?: { code: number; message: string } };
 }
 
 async function subsonic<T>(base: string, user: string, password: string, path: string, params: Record<string, string | number> = {}): Promise<T> {
@@ -41,8 +39,9 @@ async function subsonic<T>(base: string, user: string, password: string, path: s
   const res = await fetch(`${base.replace(/\/$/, "")}/rest/${path}?${q.toString()}`);
   if (!res.ok) throw new Error(`navidrome ${res.status}`);
   const data = (await res.json()) as SubsonicEnvelope<T>;
-  if (data.status !== "ok") throw new Error(data.subsonic?.error?.message ?? "navidrome error");
-  return data.subsonic;
+  const response = data["subsonic-response"];
+  if (response?.status !== "ok") throw new Error(response?.error?.message ?? "navidrome error");
+  return response;
 }
 
 function cfg() {
@@ -57,7 +56,7 @@ interface SArtist { id: string; name: string; albumCount: number; }
 interface SAlbum { id: string; name: string; artist: string; artistId?: string; coverArt?: string; songCount?: number; year?: number; }
 interface SSong {
   id: string; title: string; artist: string; artistId?: string; album: string;
-  albumId?: string; duration?: number; track?: number; year?: number; coverArt?: string; genre?: string;
+  albumId?: string; duration?: number; track?: number; year?: number; coverArt?: string; genre?: string; userRating?: number;
 }
 
 function coverUrl(coverArtId: string): string {
@@ -79,6 +78,7 @@ function songToTrack(s: SSong): Track {
     durationSecs: s.duration ? Math.round(s.duration) : undefined,
     artUrl: s.coverArt ? coverUrl(s.coverArt) : undefined,
     provider: "navidrome",
+    rating: s.userRating ?? 0,
     providerMeta: { songId: s.id, albumId: s.albumId, artistId: s.artistId },
   };
 }
@@ -102,10 +102,16 @@ export const navidromeProvider: Provider = {
 registerProvider(navidromeProvider);
 
 export const navidromeBrowse = {
+  async setRating(track: Track, rating: number): Promise<void> {
+    if (!Number.isInteger(rating) || rating < 0 || rating > 5) throw new Error("Rating must be 0–5");
+    if (track.provider !== "navidrome" || typeof track.providerMeta?.songId !== "string") throw new Error("Not a Navidrome song");
+    const c = cfg();
+    await subsonic(c.url, c.user!, c.password!, "setRating", { id: track.providerMeta.songId, rating });
+  },
   async listArtists(): Promise<SArtist[]> {
     const c = cfg();
-    const data = await subsonic<{ artists: { artist: SArtist[] } }>(c.url, c.user!, c.password!, "getArtists");
-    return data.artists.artist;
+    const data = await subsonic<{ artists: { index?: { artist?: SArtist[] }[] } }>(c.url, c.user!, c.password!, "getArtists");
+    return data.artists.index?.flatMap((i) => i.artist ?? []) ?? [];
   },
   async albumsForArtist(artistId: string): Promise<SAlbum[]> {
     const c = cfg();
@@ -114,8 +120,8 @@ export const navidromeBrowse = {
   },
   async listAlbums(size = 100): Promise<SAlbum[]> {
     const c = cfg();
-    const data = await subsonic<{ albumList: { album: SAlbum[] } }>(c.url, c.user!, c.password!, "getAlbumList2", { type: "newest", size });
-    return data.albumList.album;
+    const data = await subsonic<{ albumList2: { album?: SAlbum[] } }>(c.url, c.user!, c.password!, "getAlbumList2", { type: "newest", size });
+    return data.albumList2.album ?? [];
   },
   async tracksForAlbum(albumId: string): Promise<Track[]> {
     const c = cfg();
@@ -124,17 +130,17 @@ export const navidromeBrowse = {
   },
   async search(query: string, songCount = 50): Promise<Track[]> {
     const c = cfg();
-    const data = await subsonic<{ song: SSong[] }>(c.url, c.user!, c.password!, "search3", { query, songCount, albumCount: 0, artistCount: 0 });
-    return data.song.map(songToTrack);
+    const data = await subsonic<{ searchResult3: { song?: SSong[] } }>(c.url, c.user!, c.password!, "search3", { query, songCount, albumCount: 0, artistCount: 0 });
+    return (data.searchResult3.song ?? []).map(songToTrack);
   },
   async listPlaylists(): Promise<{ id: string; name: string }[]> {
     const c = cfg();
-    const data = await subsonic<{ playlist: { id: string; name: string }[] }>(c.url, c.user!, c.password!, "getPlaylists");
-    return data.playlist;
+    const data = await subsonic<{ playlists: { playlist?: { id: string; name: string }[] } }>(c.url, c.user!, c.password!, "getPlaylists");
+    return data.playlists.playlist ?? [];
   },
   async playlistTracks(playlistId: string): Promise<Track[]> {
     const c = cfg();
-    const data = await subsonic<{ playlist: { song: SSong[] } }>(c.url, c.user!, c.password!, "getPlaylist", { id: playlistId });
-    return data.playlist.song.map(songToTrack);
+    const data = await subsonic<{ playlist: { entry?: SSong[] } }>(c.url, c.user!, c.password!, "getPlaylist", { id: playlistId });
+    return (data.playlist.entry ?? []).map(songToTrack);
   },
 };

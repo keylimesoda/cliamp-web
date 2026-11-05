@@ -36,6 +36,8 @@ import { makeMirror } from "./impl/mirror";
 import { makeOmarchy } from "./impl/omarchy";
 import { makeRedSector } from "./impl/red_sector";
 import { makeNone } from "./impl/none";
+import { makeYinYang } from "./impl/yinyang";
+import { makeEthereal } from "./impl/ethereal";
 
 export interface VizEntry {
   name: string;
@@ -75,5 +77,7 @@ export const VISUALIZERS: VizEntry[] = [
   { name: "Mirror", make: makeMirror },
   { name: "Omarchy", make: makeOmarchy },
   { name: "RedSector", make: makeRedSector },
+  { name: "YinYang", make: makeYinYang },
+  { name: "Ethereal", make: makeEthereal },
   { name: "None", make: makeNone },
 ];

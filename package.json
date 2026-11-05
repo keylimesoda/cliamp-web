@@ -1,13 +1,15 @@
 {
   "name": "cliamp-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev": "vite",
+    "test:browser": "node tests/browser-smoke.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -15,11 +17,12 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^4.5.0",
     "typescript": "~5.9.3",
-    "vite": "^7.1.0",
-    "vitest": "^3.2.0"
+    "vite": "^7.3.7",
+    "vitest": "^5.1.0"
   }
 }

@@ -30,12 +30,16 @@ import type {
 } from "../core/types";
 import { resolveTrack } from "../providers/registry";
 import { useHistoryStore } from "./history";
+import { navidromeBrowse } from "../providers/navidrome";
+import { useServers } from "./servers";
 
 // ---- module singletons (not reactive) --------------------------------
 let engine: AudioEngine | null = null;
 let playlist: Playlist | null = null;
 let posTimer: number | null = null;
 let scrobbled = false;
+let playGeneration = 0;
+let preloadGeneration = 0;
 
 export function getEngine(): AudioEngine | null {
   return engine;
@@ -133,6 +137,7 @@ export interface PlayerState {
   queueCount: number;
   // ui
   error: string | null;
+  ratingBusy: boolean;
 
   // actions
   boot: () => Promise<void>;
@@ -150,7 +155,9 @@ export interface PlayerState {
   setMono: (on: boolean) => void;
   setEqGains: (gains: number[]) => void;
   applyPreset: (name: string) => void;
-  cyclePreset: () => void;
+  cyclePreset: (direction?: 1 | -1) => void;
+  reversePlaylist: () => void;
+  setTrackRating: (rating: number) => Promise<void>;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   queueToggle: (displayPos: number) => void;
@@ -235,6 +242,7 @@ function nextTrackIndex(): number {
   const pl = playlist;
   if (!pl || pl.currentIndex === -1) return -1;
   if (pl.queueCount > 0) return pl.queueIndices()[0];
+  if (pl.repeat === "one") return pl.currentIndex;
   const nextDisp = pl.displayAt(pl.currentIndex) + 1;
   if (nextDisp < pl.count) return pl.indexAtDisplay(nextDisp);
   return pl.repeat === "all" ? pl.indexAtDisplay(0) : -1;
@@ -245,27 +253,32 @@ async function armNextGapless(): Promise<void> {
   const eng = engine;
   const pl = playlist;
   if (!eng || !pl) return;
+  const generation = ++preloadGeneration;
+  eng.clearPreload();
+  if (usePlayerStore.getState().track?.path !== pl.currentTrack?.path) return;
   const idx = nextTrackIndex();
   if (idx === -1) return;
   const next = pl.track(idx);
-  if (!next || next.stream) return;
+  if (!next || next.live) return;
   try {
     const src = await resolveTrack(next);
-    if (src.seekable) eng.armGapless(next, src.url, src.headers);
+    if (generation === preloadGeneration && src.seekable) eng.armGapless(next, src.url, src.headers);
   } catch {
     // gapless preload is best-effort; playback continues without it
   }
 }
 
-async function playSource(track: Track, src: ResolvedSource, startAtSec: number): Promise<void> {
+async function playSource(track: Track, src: ResolvedSource, startAtSec: number, generation: number): Promise<void> {
   const eng = engine!;
   try {
     await eng.load(track, src, startAtSec);
     eng.startTick();
   } catch (e) {
+    if (generation !== playGeneration) return;
     setState({ error: e instanceof Error ? e.message : "playback failed" });
     return;
   }
+  if (generation !== playGeneration) return;
   scrobbled = false;
   const pl = playlist!;
   const curIdx = pl.currentIndex;
@@ -309,22 +322,27 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   repeat: "off",
   queueCount: 0,
   error: null,
+  ratingBusy: false,
 
   async boot() {
     if (get().booted) return;
     playlist = new Playlist();
     engine = new AudioEngine({
-      onTrackEnd: () => {
+      onTrackEnd: (promoted) => {
         // The gapless buffer (if any) is now the playing track.
         const eng = engine!;
         const now = eng.snapshot().track;
-        if (now && playlist) {
-          const disp = playlist.displayAt(indexOfTrack(playlist, now));
-          if (disp !== -1) playlist.playDisplay(disp);
+        if (promoted && now && playlist) {
+          // Advance through the model so a play-next entry is consumed once.
+          playlist.next();
+          scrobbled = false;
           syncPlaylistUI();
+          setState({ track: now, position: 0, duration: eng.getDuration(), seekable: eng.isSeekable() });
           void armNextGapless();
-          setState({ track: now, position: 0 });
           syncMediaSession();
+        } else if (playlist?.currentTrack?.path === now?.path && playlist?.next()) {
+          syncPlaylistUI();
+          void get().playTrack(playlist!.currentTrack!, 0);
         } else {
           // natural end with nothing preloaded
           setState({ state: "stopped", position: 0 });
@@ -383,6 +401,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   async loadPlaylist(tracks, startDisplay = 0, autoplay = true) {
     const st = get();
     if (!st.booted) await st.boot();
+    ++preloadGeneration;
+    engine?.clearPreload();
     playlist!.load(tracks, startDisplay);
     syncPlaylistUI();
     if (autoplay) {
@@ -392,22 +412,36 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   },
 
   async playDisplay(pos) {
+    if (!get().booted) await get().boot();
     const pl = playlist!;
     const t = pl.track(pl.indexAtDisplay(pos));
-    if (t) await get().playTrack(t, 0);
+    if (t) {
+      pl.playDisplay(pos);
+      syncPlaylistUI();
+      await get().playTrack(t, 0);
+    }
   },
 
   async playTrack(track, startAtSec = 0) {
+    const generation = ++playGeneration;
     const st = get();
     if (!st.booted) await st.boot();
+    ++preloadGeneration;
+    engine!.pause();
+    engine!.clearPreload();
+    // Create/resume the context while the initiating touch still has activation.
+    const initialized = engine!.init();
+    set({ error: null });
     let src: ResolvedSource;
     try {
-      src = await resolveTrack(track);
+      [src] = await Promise.all([resolveTrack(track), initialized]);
     } catch (e) {
+      if (generation !== playGeneration) return;
       set({ error: e instanceof Error ? e.message : "could not resolve source" });
       return;
     }
-    await playSource(track, src, startAtSec);
+    if (generation !== playGeneration) return;
+    await playSource(track, src, startAtSec, generation);
   },
 
   async play() {
@@ -415,19 +449,20 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     if (!st.booted) await st.boot();
     const eng = engine!;
     if (eng.snapshot().track) {
-      await eng.play();
+      try { await eng.play(); } catch (e) { set({ error: e instanceof Error ? e.message : "playback failed" }); }
       return;
     }
     // no active engine track: resume the persisted track if we have one
-    if (st.track && !st.track.stream) {
+    if (st.track) {
       const resume = readJson<PersistedResume>(RESUME_KEY);
       if (resume?.track?.path === st.track.path) {
         await get().playTrack(st.track, resume.position);
-      }
+      } else await get().playTrack(st.track, 0);
     }
   },
 
   pause() {
+    ++playGeneration;
     engine?.pause();
     persistResume();
   },
@@ -442,11 +477,13 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     const eng = engine;
     if (!eng || !eng.isSeekable()) return;
     eng.seek(sec);
+    void armNextGapless();
     set({ position: sec });
     persistResume();
   },
 
   async next() {
+    if (!get().booted) await get().boot();
     const pl = playlist!;
     if (pl.next()) {
       const t = pl.currentTrack!;
@@ -456,6 +493,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   },
 
   async prev() {
+    if (!get().booted) await get().boot();
     const pl = playlist!;
     if (pl.prev()) {
       const t = pl.currentTrack!;
@@ -488,25 +526,49 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     set({ eqPreset: name });
     persistSettings();
   },
-  cyclePreset() {
+  cyclePreset(direction = 1) {
     const current = get().eqPreset;
     const i = EQ_PRESET_CYCLE.findIndex((p) => p.toLowerCase() === current.toLowerCase());
-    const nextName = i === -1 ? "Flat" : EQ_PRESET_CYCLE[(i + 1) % EQ_PRESET_CYCLE.length];
+    const nextName = i === -1 ? "Flat" : EQ_PRESET_CYCLE[(i + direction + EQ_PRESET_CYCLE.length) % EQ_PRESET_CYCLE.length];
     get().applyPreset(nextName);
+  },
+  reversePlaylist() {
+    playlist?.reverse();
+    syncPlaylistUI();
+    void armNextGapless();
+  },
+  async setTrackRating(rating) {
+    const track = get().track;
+    if (!track || track.provider !== "navidrome" || get().ratingBusy) return;
+    const config = useServers.getState().getConfig("navidrome");
+    const pl = playlist;
+    set({ ratingBusy: true, error: null });
+    try {
+      await navidromeBrowse.setRating(track, rating);
+      if (config !== useServers.getState().getConfig("navidrome")) return;
+      if (pl === playlist) { pl?.updateTrack(track.path, { rating }); syncPlaylistUI(); }
+      engine?.updateTrack(track.path, { rating });
+      if (get().track?.path === track.path) set({ track: { ...get().track!, rating } });
+    } catch (e) {
+      if (get().track?.path === track.path) set({ error: e instanceof Error ? e.message : "Rating failed" });
+    } finally { set({ ratingBusy: false }); }
   },
   toggleShuffle() {
     playlist?.setShuffle(get().shuffle === "on" ? "off" : "on");
     syncPlaylistUI();
+    void armNextGapless();
     persistSettings();
   },
   cycleRepeat() {
     playlist?.cycleRepeat();
     syncPlaylistUI();
+    void armNextGapless();
     persistSettings();
   },
   queueToggle(displayPos) {
     playlist?.queueToggle(displayPos);
     syncPlaylistUI();
+    void armNextGapless();
   },
   setTheme(name) {
     set({ theme: name });

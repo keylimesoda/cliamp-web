@@ -13,6 +13,7 @@ const ID = "cliamp";
 interface PlexContainer<T> {
   MediaContainer?: {
     Metadata?: T[];
+    Directory?: T[];
   };
 }
 interface PlexTrack {
@@ -21,7 +22,12 @@ interface PlexTrack {
   title: string;
   artist?: string;
   album?: string;
-  year?: string;
+  grandparentTitle?: string;
+  parentTitle?: string;
+  year?: number | string;
+  parentYear?: number | string;
+  thumb?: string;
+  parentThumb?: string;
   index?: number;
   duration?: number; // ms
   Media?: { Part?: { key: string }[] };
@@ -72,9 +78,10 @@ function plexTrack(t: PlexTrack): Track {
   return {
     path: `plex://track/${t.ratingKey}`,
     title: t.title,
-    artist: t.artist,
-    album: t.album,
-    year: t.year ? parseInt(t.year, 10) : undefined,
+    artist: t.grandparentTitle ?? t.artist,
+    album: t.parentTitle ?? t.album,
+    year: Number(t.year || t.parentYear) || undefined,
+    artUrl: t.thumb || t.parentThumb ? `${base()}${t.thumb || t.parentThumb}?${tokenQ()}` : undefined,
     trackNumber: t.index,
     durationSecs: t.duration ? Math.round(t.duration / 1000) : undefined,
     provider: "plex",
@@ -85,7 +92,7 @@ function plexTrack(t: PlexTrack): Track {
 export const plexBrowse = {
   async sections(): Promise<PlexSection[]> {
     const data = await plexGet<PlexContainer<PlexSection>>("library/sections");
-    return data.MediaContainer?.Metadata ?? [];
+    return data.MediaContainer?.Directory ?? data.MediaContainer?.Metadata ?? [];
   },
   async sectionTracks(sectionKey: string, size = 300): Promise<Track[]> {
     const data = await plexGet<PlexContainer<PlexTrack>>(

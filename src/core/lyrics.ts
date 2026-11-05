@@ -15,7 +15,7 @@ export interface LyricsResult {
 }
 
 // LRC timestamp: [mm:ss.xx] or [mm:ss.xxx] (minutes >= 0, seconds 00-59).
-const LRC_TS = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/;
+const LRC_TS = /\[(\d+):([0-5]\d)(?:\.(\d{1,3}))?\]/;
 
 /** Parse LRC text into lines. Returns {synced, lines}. Plain text -> synced=false. */
 export function parseLRC(text: string): { synced: boolean; lines: LyricLine[] } {
@@ -33,8 +33,8 @@ export function parseLRC(text: string): { synced: boolean; lines: LyricLine[] } 
       const min = parseInt(m[1], 10);
       const sec = parseInt(m[2], 10);
       const fracRaw = m[3] ?? "0";
-      const frac = parseInt(fracRaw.padEnd(2, "0"), 10); // hundredths
-      times.push(min * 60 + sec + frac / 100);
+      const frac = Number(`0.${fracRaw}`);
+      times.push(min * 60 + sec + frac);
     }
     if (times.length > 0) {
       synced = true;
@@ -51,6 +51,8 @@ export function parseLRC(text: string): { synced: boolean; lines: LyricLine[] } 
     }
   }
   if (synced) {
+    // Once timestamps exist, prose/metadata outside them is not a lyric cue.
+    for (let i = out.length - 1; i >= 0; i--) if (out[i].time < 0) out.splice(i, 1);
     out.sort((a, b) => a.time - b.time);
   }
   return { synced, lines: out };

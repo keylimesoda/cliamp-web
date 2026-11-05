@@ -16,6 +16,7 @@ export interface PlaylistSnapshot {
   tracks: Track[];
   current: number; // original index, -1 if none
   queue: number[]; // original indices
+  order: number[];
 }
 
 function shuffledWithout(current: number, count: number): number[] {
@@ -31,7 +32,7 @@ function shuffledWithout(current: number, count: number): number[] {
 export class Playlist {
   private tracks: Track[] = [];
   private order: number[] = []; // original indices in play order
-  private pos = 0; // position within order; -1 when empty
+  private pos = -1; // position within order; -1 when empty
   private queue: number[] = []; // original indices, play-next order
   private shuffleMode: ShuffleMode = "off";
   private repeatMode: RepeatMode = "off";
@@ -98,7 +99,12 @@ export class Playlist {
     this.queue = [];
     this.tracks = tracks.map((t) => ({ ...t }));
     this.order = this.tracks.map((_, i) => i);
-    this.pos = this.order.length ? Math.min(startDisplay, this.order.length - 1) : -1;
+    this.pos = this.order.length ? Math.max(0, Math.min(startDisplay, this.order.length - 1)) : -1;
+    if (this.shuffleMode === "on" && this.pos >= 0) {
+      const current = this.currentIndex;
+      this.order = [current, ...shuffledWithout(current, this.tracks.length)];
+      this.pos = 0;
+    }
     this.dirty();
   }
   clear(): void {
@@ -176,17 +182,21 @@ export class Playlist {
   queueToggle(displayPos: number): void {
     const idx = this.indexAtDisplay(displayPos);
     if (idx === -1) return;
+    this.snapshot = null;
     const i = this.queue.indexOf(idx);
     if (i >= 0) this.queue.splice(i, 1);
     else this.queue.push(idx);
     this.dirty();
   }
   queueRemove(displayPos: number): void {
+    if (displayPos < 0 || displayPos >= this.queue.length) return;
+    this.takeSnapshot();
     this.queue.splice(displayPos, 1);
     this.dirty();
   }
   queueMove(from: number, to: number): void {
     if (from < 0 || from >= this.queue.length) return;
+    this.snapshot = null;
     const [item] = this.queue.splice(from, 1);
     this.queue.splice(Math.max(0, Math.min(to, this.queue.length)), 0, item);
     this.dirty();
@@ -211,33 +221,45 @@ export class Playlist {
       this.order = current === -1 ? rest : [current, ...rest];
       this.pos = this.order.length ? 0 : -1;
     } else {
-      for (let i = start; i < this.tracks.length; i++) {
-        if (atStart) this.order.unshift(i);
-        else this.order.push(i);
-      }
-      if (atStart) this.pos = Math.max(this.pos, 0);
+      const current = this.currentIndex;
+      const added = Array.from({ length: tracks.length }, (_, i) => start + i);
+      if (atStart) this.order.unshift(...added);
+      else this.order.push(...added);
+      this.pos = current === -1 ? (this.order.length ? 0 : -1) : this.displayAt(current);
     }
     this.dirty();
     return start;
   }
 
   removeDisplay(pos: number): void {
-    this.takeSnapshot();
     const idx = this.indexAtDisplay(pos);
     if (idx === -1) return;
+    this.takeSnapshot();
+    const current = this.currentIndex;
     this.tracks.splice(idx, 1);
-    this.queue = this.queue.filter((q) => q !== idx);
+    this.queue = this.queue.filter((q) => q !== idx).map((q) => q > idx ? q - 1 : q);
     this.order = this.order.filter((o) => o !== idx).map((o) => (o > idx ? o - 1 : o));
-    if (this.pos === -1) return;
-    // If we removed the current track, advance (or stop at same display pos).
-    if (this.currentIndex === -1) {
-      // current was removed
-      if (this.order.length === 0) this.pos = -1;
-      else this.pos = Math.min(pos, this.order.length - 1);
-      return;
-    }
-    // current still exists: keep display position clamped
-    this.pos = Math.min(this.pos, this.order.length - 1);
+    this.pos = current === -1 ? -1 : current === idx
+      ? Math.min(pos, this.order.length - 1)
+      : this.displayAt(current > idx ? current - 1 : current);
+    this.dirty();
+  }
+
+  /** Reverse the list, preserving the playing track and queued identities. */
+  reverse(): void {
+    if (this.count < 2) return;
+    this.takeSnapshot();
+    const current = this.currentIndex;
+    const remap = (i: number) => this.count - 1 - i;
+    this.tracks.reverse();
+    this.queue = this.queue.map(remap);
+    this.order = this.shuffleMode === "on" ? this.order.map(remap) : this.tracks.map((_, i) => i);
+    this.pos = current === -1 ? -1 : this.displayAt(remap(current));
+    this.dirty();
+  }
+
+  updateTrack(path: string, patch: Partial<Track>): void {
+    this.tracks = this.tracks.map((t) => t.path === path ? { ...t, ...patch } : t);
     this.dirty();
   }
 
@@ -267,7 +289,7 @@ export class Playlist {
     if (mode === "on") {
       const order = shuffledWithout(current, this.tracks.length);
       this.order = current === -1 ? order : [current, ...order];
-      this.pos = 0;
+      this.pos = this.order.length ? 0 : -1;
     } else {
       this.order = this.tracks.map((_, i) => i);
       this.pos = current === -1 ? -1 : current;
@@ -291,6 +313,7 @@ export class Playlist {
       tracks: this.tracks.map((t) => ({ ...t })),
       current: this.currentIndex,
       queue: [...this.queue],
+      order: [...this.order],
     };
   }
   /** Restore the snapshot taken before the last destructive mutation. */
@@ -300,8 +323,7 @@ export class Playlist {
     this.snapshot = null;
     this.tracks = s.tracks;
     this.queue = s.queue;
-    this.order = this.tracks.map((_, i) => i);
-    if (this.shuffleMode === "on") this.setShuffle("on");
+    this.order = s.order;
     this.pos = s.current === -1 ? -1 : this.displayAt(s.current);
     this.dirty();
   }
