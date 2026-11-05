@@ -4,6 +4,15 @@ Audited November 5, 2026, after the v0.2.0 web update. The browser app is a
 separate TypeScript implementation. It does **not** have complete feature or
 behavioral parity with cliamp. The original README overstated its coverage.
 
+## Deployed Tesla branch correction
+
+The first pass examined master and missed the deployed
+`tesla-804x638-layout` branch (head `51649ac`). That branch already included
+FAVS with station/episode metadata and saved podcast shows, an immersive
+visualizer, Tesla-sized navigation, direct podcast playback, and RSS duration
+fixes. Those existing features are preserved in this PR's integration. Favorites
+and immersive mode must not be treated as new missing work.
+
 ## Reference and method
 
 - Native reference: [bjarneo/cliamp v2.4.0](https://github.com/bjarneo/cliamp/releases/tag/v2.4.0),
@@ -15,7 +24,7 @@ behavioral parity with cliamp. The original README overstated its coverage.
 - Compared the tagged native source, documentation and provider test fixtures
   against actual browser code, UI wiring and tests. The historical JSON reports
   in `docs/recon/` describe the original investigation, not verified coverage.
-- Runtime evidence: 86 automated unit/regression tests, TypeScript checking,
+- Runtime evidence: 89 automated unit/regression tests, TypeScript checking,
   production build, and Chromium fixture tests at 804×638 CSS pixels, touch
   enabled, DPR 1.96. Browser tests ran inside an isolated omabox box
   (Omarchy 4.5.0-3, virtual desktop 1024×768, no shell); fictional stations,
@@ -97,10 +106,10 @@ Browser evidence: `src/providers/`, `src/components/*Browser.tsx`,
 | --- | --- | --- |
 | cliamp radio channels / song playlists | Implemented | Live/song paths and stats exist. Fixture-tested; live API CORS and production stations not revalidated. |
 | Radio Browser country/tag/name search and ordering | Partial | Country pins, tags, searches and five ordering options exist. Fixed directory hostname, no failover/paging; tags UI truncates at 300. No region browse or consent-based nearby-country suggestion. |
-| Radio favorites | Partial | Persists only URLs and row stars. No dedicated favorites list retaining station metadata; favorite stations must be found again. |
+| Radio favorites | Implemented | The deployed FAVS screen already keeps saved station/episode metadata and provides direct playback. Preserved and covered by browser regression checks. |
 | Custom stations / direct URL / M3U / PLS | Missing | Engine accepts URLs internally but there is no URL/add-station form, playlist parser/import/export or native saved-station format. |
 | Podcast chart/search/categories/RSS/subscriptions | Partial | Apple chart/search, 19 categories and RSS enclosures; saved subscriptions. Chart country fixed to US. Search is per keystroke, not submit-only. Direct feed-URL input and Atom episode extraction are absent. CORS can block publisher feeds. |
-| Podcast progress / played state / latest from subscriptions | Missing | No GUID-based progress map, five-second rewind, played markers, enqueue-latest or batch subscription actions. RSS duration parser also lacks common `HH:MM:SS` values. |
+| Podcast progress / played state / latest from subscriptions | Missing | No GUID-based progress map, five-second rewind, played markers, enqueue-latest or batch subscription actions. RSS duration parsing includes the deployed branch’s `HH:MM:SS` fix. |
 | Local files/folders / tags / embedded lyrics | Missing | “Local” means history/favorites only. No File API picker, directory import, file tags or embedded lyrics. User-mediated file import is feasible in a static app. |
 | Navidrome artists/albums/search | Partial | Real Subsonic envelope/nesting corrected; fixture-tested. No real authenticated server test. No UI pagination/sort chooser, saved-playlist browse, server favorite sync, playback reporting, provider lyrics or transcoding preferences. |
 | Navidrome ratings | Partial | Current-track rating works against fixture requests; selected nonplaying tracks and library-wide cached rating refresh are not implemented. |
@@ -140,7 +149,7 @@ Native references: [playlists](https://github.com/bjarneo/cliamp/blob/v2.4.0/doc
 | Track favorites | Partial | localStorage list and playable rows; no Navidrome/Spotify favorite synchronization. Distinct from the separate radio URL list. |
 | Built-in visualizer names | Implemented | All 34 native names plus None in native order; registry and rendering tests. Numeric preferences migrate to names. |
 | Visualizer fidelity / analysis | Partial | Character-grid adaptations, not verified pixel/algorithm parity. Stereo meters simulate L/R from a mono tap; FFT uses ten bands even for modes whose native drivers request more. YinYang uses Braille and simplified path motion. |
-| Visualizer picker / fullscreen / low power | Missing | Tap-to-cycle only. No direct picker, fullscreen visualizer, low-power preference or background playback guarantee. |
+| Visualizer picker / fullscreen / low power | Partial | The deployed immersive visualizer and its touch controls are preserved, with enter/exit browser checks. No direct mode picker, low-power preference or background playback guarantee. |
 | Bundled themes | Implemented | All 22 vendored TOMLs match tagged native theme files byte-for-byte. Settings → Appearance has a named picker and palette preview, reachable directly from Now Playing. Selection applies immediately and persists. Browser checks cover all options, light/dark palettes, persistence and continued playback. User theme import is absent. |
 | LRCLIB and synced LRC | Partial | Lookup, repeated timestamps, millisecond precision, sorting and auto-scroll exist. No embedded/sidecar loader, NetEase/provider fallback, retry control, timing-offset control or native query cleaning. |
 | Metadata/cover/info screens | Partial | Title, artist, time and MediaSession artwork fields; no full metadata screen, album headers or in-app cover pane. |
@@ -184,7 +193,7 @@ Browser evidence: `src/lua/host.ts`, `src/lua/vm.ts`, `src/store/plugins.ts`,
    playlists, expose queue editing, stop, speed and custom EQ; add saved
    playlists and URL/file import. Measure non-1× timing and track transitions.
 3. **Restore useful state.** Per-episode/book progress, proper history semantics,
-   durable playlist/queue resume, radio favorites with metadata, provider
+   durable playlist/queue resume, provider
    favorites/reporting, and subscription batch actions.
 4. **Treat plugin parity as its own project.** Isolate/bound execution first;
    specify the supported native API/events, then implement HTTP/timers, queue

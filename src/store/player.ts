@@ -262,7 +262,7 @@ async function armNextGapless(): Promise<void> {
   if (!next || next.live) return;
   try {
     const src = await resolveTrack(next);
-    if (generation === preloadGeneration && src.seekable) eng.armGapless(next, src.url, src.headers);
+    if (generation === preloadGeneration && src.seekable && !src.direct) eng.armGapless(next, src.url, src.headers);
   } catch {
     // gapless preload is best-effort; playback continues without it
   }
@@ -275,7 +275,7 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number,
     eng.startTick();
   } catch (e) {
     if (generation !== playGeneration) return;
-    setState({ error: e instanceof Error ? e.message : "playback failed" });
+    setState({ state: eng.snapshot().state, error: e instanceof Error ? e.message : "playback failed" });
     return;
   }
   if (generation !== playGeneration) return;
@@ -293,6 +293,7 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number,
     position: startAtSec,
     duration: eng.getDuration(),
     seekable: eng.isSeekable(),
+    error: null,
   });
   syncMediaSession();
   void armNextGapless();
@@ -430,7 +431,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     engine!.pause();
     engine!.clearPreload();
     // Create/resume the context while the initiating touch still has activation.
-    const initialized = engine!.init();
+    const initialized = track.provider === "podcast" ? Promise.resolve() : engine!.init();
     set({ error: null });
     let src: ResolvedSource;
     try {

@@ -72,7 +72,7 @@ export const podcastProvider: Provider = {
   capabilities: { browse: true, search: true },
   async resolveSource(track: Track): Promise<ResolvedSource> {
     // A podcast episode's path is the playable enclosure URL (finite).
-    return { url: track.path, seekable: true };
+    return { url: track.path, seekable: true, direct: true };
   },
 };
 

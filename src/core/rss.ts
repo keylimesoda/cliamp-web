@@ -28,10 +28,21 @@ function textNS(el: Element, ns: string, local: string): string | undefined {
   return el.getElementsByTagNameNS(ns, local).item(0)?.textContent?.trim();
 }
 
-function parseDuration(raw?: string): number | undefined {
+export function parseDuration(raw?: string): number | undefined {
   if (!raw) return undefined;
   const s = raw.trim();
   if (/^\d+(\.\d+)?$/.test(s)) return Math.round(parseFloat(s));
+  if (/^\d+(?::\d{1,2}){1,2}$/.test(s)) {
+    const parts = s.split(":").map(Number);
+    if (parts.length === 2) {
+      const [m, sec] = parts;
+      if (sec >= 60) return undefined;
+      return m * 60 + sec;
+    }
+    const [h, m, sec] = parts;
+    if (m >= 60 || sec >= 60) return undefined;
+    return h * 3600 + m * 60 + sec;
+  }
   const m = s.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
   if (m) {
     const h = Number(m[1] ?? 0);
@@ -72,9 +83,12 @@ export function parseFeed(xml: string, feedUrl: string, showTitle: string, limit
       textNS(item, ATOM_NS, "id") ??
       url;
     const pubDate = text(item, "pubDate");
+    const mediaContent = item.getElementsByTagNameNS(MEDIA_NS, "content").item(0);
     const duration = parseDuration(
       textNS(item, ITUNES_NS, "duration") ??
-        textNS(item, MEDIA_NS, "content")?.match(/duration="(\d+)"/)?.[1],
+        text(item, "itunes:duration") ??
+        mediaContent?.getAttribute("duration") ??
+        undefined,
     );
     episodes.push({
       path: url,

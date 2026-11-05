@@ -87,6 +87,21 @@ export class AudioEngine {
   constructor(cb: EngineCallbacks = {}) {
     this.cb = cb;
     this.element.preload = "auto";
+    this.plainElement.preload = "auto";
+    for (const el of [this.processedElement, this.plainElement]) {
+        const active = () => this.element === el && !this.gaplessSource;
+        el.addEventListener("playing", () => { if (active()) this.setState("playing"); });
+        el.addEventListener("pause", () => {
+          if (active() && !this.loading && this.state !== "stopped") this.setState("paused");
+        });
+        el.addEventListener("waiting", () => { if (active()) this.setState("buffering"); });
+        el.addEventListener("seeking", () => { if (active()) this.setState("seeking"); });
+        el.addEventListener("seeked", () => { if (active()) this.setState(el.paused ? "paused" : "playing"); });
+        el.addEventListener("ended", () => { if (active()) this.handleEnded(); });
+        el.addEventListener("error", () => {
+          if (active() && !this.loading && el.error && this.state !== "stopped") this.cb.onError?.(el.error.message || "playback error");
+        });
+      }
   }
 
   // ---- lifecycle ------------------------------------------------------
@@ -159,20 +174,6 @@ export class AudioEngine {
 
       this.sampleBuf = new Float32Array(analyser.fftSize);
 
-      for (const el of [this.processedElement, this.plainElement]) {
-        const active = () => this.element === el && !this.gaplessSource;
-        el.addEventListener("playing", () => { if (active()) this.setState("playing"); });
-        el.addEventListener("pause", () => {
-          if (active() && !this.loading && this.state !== "stopped") this.setState("paused");
-        });
-        el.addEventListener("waiting", () => { if (active()) this.setState("buffering"); });
-        el.addEventListener("seeking", () => { if (active()) this.setState("seeking"); });
-        el.addEventListener("seeked", () => { if (active()) this.setState(el.paused ? "paused" : "playing"); });
-        el.addEventListener("ended", () => { if (active()) this.handleEnded(); });
-        el.addEventListener("error", () => {
-          if (active() && !this.loading && el.error && this.state !== "stopped") this.cb.onError?.(el.error.message || "playback error");
-        });
-      }
       this.setEqGains(this.eqGains);
       this.setMono(this.mono);
       this.applySpeedToWorklet();
@@ -185,6 +186,32 @@ export class AudioEngine {
   /** Load and play a track from a resolved source. */
   async load(track: Track, src: ResolvedSource, startAtSec = 0): Promise<void> {
     const generation = ++this.loadGeneration;
+    // Podcast enclosures use the standalone element immediately: they do not
+    // need a worklet or CORS permission and retain the initiating touch gesture.
+    if (src.direct) {
+      this.loading = true;
+      this.element.pause();
+      this.resumeCleanup?.();
+      this.track = track;
+      this.seekable = src.seekable === true;
+      this.stopGapless();
+      this.processedElement.pause();
+      this.element = this.plainElement;
+      this.bands.fill(0);
+      this.sampleBuf?.fill(0);
+      const el = this.element;
+      el.volume = Math.min(1, dbToGain(this.volumeDb));
+      el.playbackRate = this.speed;
+      el.src = src.url;
+      el.load();
+      this.applyResume(el, src, startAtSec);
+      try { await el.play(); }
+      catch (e) { if (generation === this.loadGeneration) { this.loading = false; throw e; } }
+      if (generation !== this.loadGeneration) return;
+      this.loading = false;
+      this.notify();
+      return;
+    }
     await this.init();
     if (generation !== this.loadGeneration) return;
     const ctx = this.ctx!;
@@ -246,6 +273,11 @@ export class AudioEngine {
   }
 
   async play(): Promise<void> {
+    if (this.element === this.plainElement) {
+      await this.element.play();
+      this.setState("playing");
+      return;
+    }
     await this.init();
     const ctx = this.ctx!;
     await ctx.resume();
@@ -257,18 +289,17 @@ export class AudioEngine {
   pause(): void {
     this.loadGeneration++;
     this.loading = false;
-    if (!this.ctx) return;
-    if (this.gaplessSource) this.ctx.suspend();
+    if (this.gaplessSource && this.ctx) this.ctx.suspend();
     else this.element.pause();
     this.setState("paused");
   }
 
   /** Seek within the current (finite) source. */
   seek(sec: number): void {
-    if (!this.ctx || !this.track) return;
+    if (!this.track) return;
     if (!this.seekable || !Number.isFinite(sec)) return;
     this.clearPreload();
-    if (this.gaplessSource) {
+    if (this.gaplessSource && this.ctx) {
       const buffer = this.gaplessSource.buffer;
       if (!buffer) return;
       const src = this.gaplessSource;
@@ -469,6 +500,10 @@ export class AudioEngine {
 
   /** Current playback position in seconds (0 for unknown/live). */
   getPosition(): number {
+    if (this.element === this.plainElement) {
+      const position = this.element.currentTime;
+      return Number.isFinite(position) ? position : 0;
+    }
     if (!this.ctx) return 0;
     if (this.gaplessSource) {
       return this.gaplessOffset + (this.ctx.currentTime - this.gaplessStartedAt);

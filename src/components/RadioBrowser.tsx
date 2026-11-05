@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { radioBrowse, RADIO_ORDER_LABELS, type RadioOrder, type RadioCountry, type RadioTag } from "../providers/radio";
 import { getEngine, usePlayerStore } from "../store/player";
 import { useRadioPrefs } from "../store/radioPrefs";
+import { useFavoritesStore } from "../store/favorites";
 import type { Track } from "../core/types";
 import { useAsync } from "./useAsync";
 
@@ -61,6 +62,7 @@ function Row({ label, hint, onClick }: { label: string; hint?: string; onClick?:
 export default function RadioBrowser() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const prefs = useRadioPrefs();
+  const favorites = useFavoritesStore();
   const [view, setView] = useState<View>({ kind: "home" });
   const [query, setQuery] = useState("");
   const [countryName, setCountryName] = useState("");
@@ -93,6 +95,18 @@ export default function RadioBrowser() {
 
   const play = (t: Track) => {
     void playTrack(t, 0);
+  };
+
+  const isStationFavorite = (t: Track) =>
+    favorites.tracks.some((x) => x.path === t.path) || prefs.isFavorite(t.path);
+
+  const toggleStationFavorite = (t: Track) => {
+    const savedTrack = favorites.tracks.some((x) => x.path === t.path);
+    const legacySaved = prefs.isFavorite(t.path);
+
+    if (savedTrack) favorites.toggle(t);
+    if (legacySaved) prefs.toggleFavorite(t.path);
+    if (!savedTrack && !legacySaved) favorites.toggle(t);
   };
 
   const builtinsKey = view.kind === "home" ? "builtins" : "";
@@ -168,7 +182,7 @@ export default function RadioBrowser() {
       : [];
 
   return (
-    <div className="app">
+    <div className="app source-browser">
       <div className="app-titlebar">
         <button onClick={back} style={{ padding: 0 }} aria-label="Back" disabled={view.kind === "home"}>
           ◀
@@ -222,8 +236,8 @@ export default function RadioBrowser() {
               />
             </div>
           </div>
-          <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0, display: "flex" }}>
-            <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+          <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+            <div className="list">
               {(builtins.data ?? []).map((t) => (
                 <div className="row" key={t.path} onClick={() => {
                   if (t.providerMeta?.trackCount && t.providerMeta?.tracksUrl) void openChannel(t);
@@ -233,6 +247,17 @@ export default function RadioBrowser() {
                   <span className="title">{t.title}</span>
                   <span className="dur">{t.providerMeta?.trackCount && t.providerMeta?.tracksUrl ? `${t.providerMeta.trackCount} songs` : t.genre ?? "LIVE"}
                     {counts[String(t.providerMeta?.builtin)] !== undefined ? ` · ${counts[String(t.providerMeta?.builtin)]} listening` : ""}
+                  </span>
+                  <span
+                    className={"radio-star" + (isStationFavorite(t) ? " is-fav" : "")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStationFavorite(t);
+                    }}
+                    role="button"
+                    aria-label={isStationFavorite(t) ? "Remove favorite" : "Favorite station"}
+                  >
+                    {isStationFavorite(t) ? "★" : "☆"}
                   </span>
                 </div>
               ))}
@@ -244,8 +269,8 @@ export default function RadioBrowser() {
       )}
 
       {view.kind === "countries" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {countries.busy ? <Row label="loading countries…" /> : null}
             {orderedCountries.map((c) => (
               <div
@@ -258,19 +283,20 @@ export default function RadioBrowser() {
                 role="button"
                 aria-label={c.name}
               >
+                <span className="marker" aria-hidden>▸</span>
+                <span className="title">{c.name}</span>
+                <span className="dur">{c.stationcount}</span>
                 <span
-                  className={"marker" + (prefs.isPinned(c.code) ? " is-fav" : "")}
+                  className={"radio-star" + (prefs.isPinned(c.code) ? " is-fav" : "")}
                   onClick={(e) => {
                     e.stopPropagation();
                     prefs.togglePin(c.code);
                   }}
                   role="button"
-                  aria-label="Pin"
+                  aria-label={prefs.isPinned(c.code) ? "Unpin country" : "Pin country"}
                 >
-                  {prefs.isPinned(c.code) ? "★" : ""}
+                  {prefs.isPinned(c.code) ? "★" : "☆"}
                 </span>
-                <span className="title">{c.name}</span>
-                <span className="dur">{c.stationcount}</span>
               </div>
             ))}
           </div>
@@ -278,8 +304,8 @@ export default function RadioBrowser() {
       )}
 
       {view.kind === "tags" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {tags.busy ? <Row label="loading tags…" /> : null}
             {(tags.data ?? []).slice(0, 300).map((t) => (
               <div className="row" key={t.name} onClick={() => setView({ kind: "tag", name: t.name })} role="button" aria-label={t.name}>
@@ -293,24 +319,25 @@ export default function RadioBrowser() {
       )}
 
       {(view.kind === "country" || view.kind === "tag" || view.kind === "search") && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {stationBusy ? <Row label="loading stations…" /> : null}
             {stationList.map((t) => (
               <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
-                <span
-                  className={"marker" + (prefs.isFavorite(t.path) ? " is-fav" : "")}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    prefs.toggleFavorite(t.path);
-                  }}
-                  role="button"
-                  aria-label="Favorite"
-                >
-                  {prefs.isFavorite(t.path) ? "★" : ""}
-                </span>
+                <span className="marker" aria-hidden>♫</span>
                 <span className="title">{t.title}</span>
                 <span className="dur">{(t.providerMeta?.countrycode as string) ?? t.genre ?? "LIVE"}</span>
+                <span
+                  className={"radio-star" + (isStationFavorite(t) ? " is-fav" : "")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleStationFavorite(t);
+                  }}
+                  role="button"
+                  aria-label={isStationFavorite(t) ? "Remove favorite" : "Favorite station"}
+                >
+                  {isStationFavorite(t) ? "★" : "☆"}
+                </span>
               </div>
             ))}
             {!stationBusy && stationList.length === 0 ? (
@@ -323,7 +350,7 @@ export default function RadioBrowser() {
       <div className="footer">
         <div className="help-row">
           <span>
-            <span className="key-pill">tip</span> tap a station to play · ★ pins / favorites
+            <span className="key-pill">tip</span> tap a station to play · ☆ / ★ pins / favorites
           </span>
         </div>
       </div>

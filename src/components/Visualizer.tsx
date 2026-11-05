@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getEngine, usePlayerStore } from "../store/player";
 import { useVizStore } from "../store/viz";
 import { VISUALIZERS } from "../viz/registry";
@@ -10,6 +10,7 @@ import type { VizColors, VizData, Visualizer as Viz } from "../viz/types";
 const TICK_PLAYING_MS = 16;
 const TICK_PAUSED_MS = 200;
 const WAVE_ZERO = new Float32Array(1024);
+const CELL_ASPECT = 0.62;
 
 function cssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -30,7 +31,12 @@ function readColors(): VizColors {
   };
 }
 
-function vizData(): VizData {
+export function immersiveRowsForRect(width: number, height: number): number {
+  if (width <= 0 || height <= 0) return VIZ_ROWS;
+  return Math.max(8, Math.min(64, Math.round((height * VIZ_COLS * CELL_ASPECT) / width)));
+}
+
+function vizData(cols: number, rows: number): VizData {
   const st = usePlayerStore.getState();
   const eng = getEngine();
   return {
@@ -39,22 +45,60 @@ function vizData(): VizData {
     t: performance.now() / 1000,
     dt: 0,
     playing: st.state === "playing",
-    cols: VIZ_COLS,
-    rows: VIZ_ROWS,
+    cols,
+    rows,
     colors: readColors(),
   };
 }
 
+interface VisualizerProps {
+  immersive?: boolean;
+}
+
 /**
- * Visualizer — 34 cliamp visualizer modes (plus None), rendered as
- * character grids on a canvas. Tap/click the area to cycle modes
- * (original "v" key); the choice persists.
+ * Visualizer — all cliamp visualizer modes, rendered as a character grid.
+ *
+ * Normal mode preserves the original 80x16 grid. Immersive mode keeps 80
+ * columns but derives the row count from the actual display rectangle, then
+ * sizes the canvas backing store to the real CSS dimensions. That prevents the
+ * old 900x200 bitmap from being stretched into the 804x638 Tesla layout.
  */
-export default function Visualizer() {
+export default function Visualizer({ immersive = false }: VisualizerProps) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const [grid, setGrid] = useState({ cols: VIZ_COLS, rows: VIZ_ROWS });
   const index = useVizStore((s) => s.index);
   const theme = usePlayerStore((s) => s.theme);
   const name = VISUALIZERS[index]?.name ?? "";
+
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+
+    if (!immersive) {
+      canvas.width = 900;
+      canvas.height = 200;
+      setGrid((g) => (g.cols === VIZ_COLS && g.rows === VIZ_ROWS ? g : { cols: VIZ_COLS, rows: VIZ_ROWS }));
+      return;
+    }
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const width = Math.max(1, Math.round(rect.width * dpr));
+      const height = Math.max(1, Math.round(rect.height * dpr));
+      if (canvas.width !== width) canvas.width = width;
+      if (canvas.height !== height) canvas.height = height;
+
+      const rows = immersiveRowsForRect(rect.width, rect.height);
+      setGrid((g) => (g.cols === VIZ_COLS && g.rows === rows ? g : { cols: VIZ_COLS, rows }));
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+    return () => observer.disconnect();
+  }, [immersive]);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -63,7 +107,7 @@ export default function Visualizer() {
     if (!entry) return;
     const viz: Viz = entry.make();
     canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
-    viz.init?.(VIZ_COLS, VIZ_ROWS);
+    viz.init?.(grid.cols, grid.rows);
     let raf = 0;
     let last = performance.now();
 
@@ -73,7 +117,7 @@ export default function Visualizer() {
       const dt = now - last;
       if (dt < interval) return;
       last = now - (dt % interval);
-      const d = vizData();
+      const d = vizData(grid.cols, grid.rows);
       d.dt = dt / 1000;
       if (entry.name !== "None") {
         try {
@@ -86,7 +130,7 @@ export default function Visualizer() {
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [index, theme]);
+  }, [grid.cols, grid.rows, index, theme]);
 
   return (
     <div
@@ -95,7 +139,13 @@ export default function Visualizer() {
       role="button"
       aria-label={`Visualizer: ${name}. Tap to switch.`}
     >
-      <canvas ref={ref} className="visualizer" width={900} height={200} aria-hidden />
+      <canvas
+        ref={ref}
+        className={"visualizer" + (immersive ? " is-immersive" : "")}
+        width={immersive ? undefined : 900}
+        height={immersive ? undefined : 200}
+        aria-hidden
+      />
       <span className="viz-name">{name}</span>
     </div>
   );

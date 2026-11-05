@@ -1,3 +1,27 @@
+@font-face {
+  font-family: "CLIAMP JetBrains Mono";
+  src: url("https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/webfonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "CLIAMP JetBrains Mono";
+  src: url("https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/webfonts/JetBrainsMono-Bold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "CLIAMP Nerd Symbols";
+  src: url("https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts@v3.5.1/patched-fonts/NerdFontsSymbolsOnly/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
 /*
  * cliamp-web design system — retro terminal (phosphor / Winamp) aesthetic.
  *
@@ -54,13 +78,18 @@
   --spectrum-high: var(--red);
 
   /* ---- typography ---- */
-  --font-mono: "JetBrains Mono", "Fira Code", "DejaVu Sans Mono", Menlo,
-    Consolas, monospace;
-  --fs-xs: clamp(0.72rem, 0.66rem + 0.2vw, 0.85rem);
-  --fs-sm: clamp(0.85rem, 0.78rem + 0.25vw, 1rem);
-  --fs-md: clamp(1rem, 0.92rem + 0.3vw, 1.2rem);
-  --fs-lg: clamp(1.3rem, 1.15rem + 0.5vw, 1.7rem);
-  --fs-xl: clamp(1.9rem, 1.6rem + 0.9vw, 2.6rem);
+  --font-mono: "CLIAMP JetBrains Mono", "JetBrains Mono", "Fira Code",
+    "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --font-symbols: "CLIAMP Nerd Symbols", "Symbols Nerd Font Mono",
+    "CLIAMP JetBrains Mono", monospace;
+  /* A terminal has one character-cell size. Hierarchy comes from weight,
+     color, spacing, borders, and inverse/selected states instead. */
+  --cell-fs: 1rem;
+  --fs-xs: var(--cell-fs);
+  --fs-sm: var(--cell-fs);
+  --fs-md: var(--cell-fs);
+  --fs-lg: var(--cell-fs);
+  --fs-xl: var(--cell-fs);
 
   /* ---- touch: car-safe hit targets ---- */
   --tap-min: 56px; /* minimum target (recon: no hover, no keyboard) */
@@ -105,7 +134,7 @@ body {
   color: var(--text);
   font-family: var(--font-mono);
   font-size: var(--fs-md);
-  line-height: 1.45;
+  line-height: 1.25;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   /* touch-first: no accidental text selection, no tap highlight */
@@ -168,6 +197,24 @@ body::before {
   color: var(--warn);
 }
 
+/* glyphs: Nerd Font symbols stay fixed-width and separate from text metrics */
+.nf-icon {
+  font-family: var(--font-symbols);
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  speak: none;
+}
+
+.nav-icon {
+  display: inline-block;
+  margin-right: 0.35em;
+}
+
+.transport-icon {
+  font-size: 1em;
+}
+
 /* ---- buttons ---- */
 button {
   font-family: inherit;
@@ -200,10 +247,37 @@ button.btn-accent {
 button.btn-primary {
   min-width: var(--tap-lg);
   min-height: var(--tap-lg);
-  font-size: var(--fs-lg);
+  font-size: inherit;
+  font-weight: 700;
   border-color: var(--border-accent);
   color: var(--text-accent);
   box-shadow: var(--glow-dim);
+}
+
+/* ---- fixed primary navigation ---- */
+.app-nav {
+  position: fixed;
+  inset: auto 0 0 0;
+  display: flex;
+  gap: var(--gap);
+  padding: var(--gap);
+  background: var(--bg-sunken);
+  border-top: 1px solid var(--border);
+  z-index: 10;
+}
+.app-nav button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.app-nav button.btn-accent {
+  background: var(--row-active);
+  font-weight: 700;
+}
+.nav-label {
+  white-space: nowrap;
+}
+.nav-label-compact {
+  display: none;
 }
 
 /* ---- key / hint pill (terminal key hint, contrast computed by caller) ---- */
@@ -218,8 +292,9 @@ button.btn-primary {
   border-radius: var(--radius);
   background: var(--bg-sunken);
   color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: 1.5;
+  font-size: inherit;
+  font-weight: 700;
+  line-height: 1.25;
 }
 .help-row > .key-pill[role="button"], .help-row > button.key-pill {
   min-height: var(--tap-min);
@@ -259,6 +334,23 @@ select {
   border-color: var(--border-accent);
 }
 
+/* Source/browser screens keep chrome fixed while only the result list scrolls. */
+.source-browser {
+  overflow: hidden;
+}
+.scroll-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.scroll-panel > .list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* ---- list (playlist / catalog rows) ---- */
 .list {
   display: flex;
@@ -267,7 +359,8 @@ select {
   min-height: 0; /* allow flex children to scroll */
 }
 .row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--gap-sm);
   min-height: var(--tap-min);
@@ -288,9 +381,13 @@ select {
   background: var(--row-active);
   border-left-color: var(--accent);
 }
+.row.is-active .title {
+  font-weight: 700;
+}
 .row .marker {
-  width: 1.4em;
-  min-height: 1.4em;
+  width: 2.2em;
+  min-height: 2.2em;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -317,6 +414,161 @@ select {
   color: var(--text-dim);
   font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
+}
+
+.radio-star {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.radio-star.is-fav {
+  color: var(--favorite);
+}
+
+.save-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.save-toggle.is-fav {
+  color: var(--favorite);
+}
+
+.favorites-section-label {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  padding: 0 0.6rem;
+  color: var(--text-dim);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.favorite-kind {
+  min-width: 4.5em;
+  text-align: right;
+  color: var(--text-dim);
+}
+
+/* ---- plugin toggles: the whole row is the touch control ---- */
+.plugin-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: var(--tap-min);
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-sunken);
+  border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  color: var(--text);
+  text-align: left;
+  overflow: hidden;
+}
+
+.plugin-row:active {
+  background: var(--row-hover);
+  border-color: var(--border);
+}
+
+.plugin-row.is-enabled {
+  border-left-color: var(--accent);
+}
+
+.plugin-marker {
+  width: 1.4em;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.plugin-row.is-enabled .plugin-marker {
+  color: var(--accent);
+}
+
+.plugin-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.plugin-name {
+  min-width: 0;
+  color: var(--text);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plugin-description {
+  min-width: 0;
+  color: var(--text-dim);
+  line-height: 1.1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.plugin-state {
+  color: var(--text-dim);
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+.plugin-row.is-enabled .plugin-state {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ---- now-playing queue: single horizontal touch row ---- */
+.queue-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: var(--tap-min);
+}
+
+.queue-index {
+  display: grid;
+  grid-template-columns: 1.4em 2.2em;
+  align-items: center;
+  gap: var(--gap-sm);
+}
+
+.queue-row .title {
+  white-space: nowrap;
+}
+
+.queue-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  min-width: max-content;
+}
+
+.queue-meta .dur {
+  margin-left: 0;
+  min-width: 4.5em;
+  text-align: right;
+}
+
+.queue-favorite-toggle {
+  min-width: 44px;
+  min-height: 44px;
 }
 
 /* ---- meters (seek + volume) ---- */
@@ -380,7 +632,7 @@ select {
   gap: var(--gap);
 }
 .app-title {
-  font-size: var(--fs-lg);
+  font-size: inherit;
   letter-spacing: 0.35em;
   font-weight: 700;
   color: var(--text-accent);
@@ -402,7 +654,7 @@ select {
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
-  font-size: var(--fs-lg);
+  font-size: inherit;
   color: var(--text-accent);
   overflow: hidden;
 }
@@ -410,6 +662,7 @@ select {
   color: var(--text);
 }
 .track-line .name {
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -418,7 +671,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: var(--fs-sm);
+  font-size: inherit;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -434,7 +687,7 @@ select {
 }
 .plugin-status {
   margin-top: 0.35rem;
-  font-size: 0.78rem;
+  font-size: inherit;
   letter-spacing: 0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -461,9 +714,11 @@ select {
   position: absolute;
   top: calc(var(--gap) / 2);
   right: calc(var(--gap) / 2);
-  font-size: 0.65rem;
+  font-size: inherit;
   letter-spacing: 0.08em;
   color: var(--text-dim);
+  background: color-mix(in srgb, var(--bg-sunken) 82%, transparent);
+  padding: 0 0.25em;
   pointer-events: none;
 }
 
@@ -480,6 +735,20 @@ select {
   display: flex;
   flex-direction: column;
   gap: var(--gap-sm);
+}
+.advanced-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+}
+.advanced-header,
+.compact-more-toggle,
+.volume-label {
+  display: none;
+}
+.mix-primary,
+.volume-control {
+  min-width: 0;
 }
 .eq-bands {
   display: flex;
@@ -535,13 +804,179 @@ select {
   color: var(--error);
 }
 
-/* ---- responsive tiers (recon §3: full / compact / minimal) ---- */
-/* Short car viewports keep the playlist and touch controls visible. */
-@media (max-height: 700px) {
-  .eq-bands { display: none; }
-  .visualizer { height: 72px; }
-  .nowplaying, .mix { gap: 0.2rem; }
-}
+/* ---- canonical Tesla layout ---- */
+/*
+ * Measured target: 804x638 CSS px at DPR 1.96 (Chrome 148).
+ * This is the application's default design canvas everywhere.
+ */
+  :root {
+    --gap: 6px;
+    --gap-sm: 4px;
+    --pad: 8px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 804px;
+    margin: 0 auto;
+    gap: var(--gap);
+    padding: 6px var(--pad) calc(var(--tap-min) + 18px);
+  }
+
+  .app-titlebar {
+    min-height: 22px;
+  }
+
+  .app-title {
+    font-size: inherit;
+    letter-spacing: 0.24em;
+  }
+
+  .app-titlebar .screen-label {
+    display: none;
+  }
+
+  .nowplaying {
+    gap: 4px;
+    padding: 8px;
+  }
+
+  .track-line {
+    font-size: inherit;
+  }
+
+  .plugin-status {
+    margin-top: 0;
+    font-size: inherit;
+  }
+
+  .visualizer {
+    height: 72px;
+  }
+
+  .transport {
+    gap: 8px;
+  }
+
+  .transport button {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    padding: 0.35rem 0.75rem;
+  }
+
+  .transport .btn-primary {
+    min-width: 64px;
+    min-height: 64px;
+    font-size: inherit;
+    font-weight: 700;
+  }
+
+  .advanced-controls {
+    display: none;
+  }
+
+  .advanced-controls.is-open {
+    position: fixed;
+    left: 50%;
+    right: auto;
+    width: calc(min(100%, 804px) - 16px);
+    transform: translateX(-50%);
+    bottom: calc(var(--tap-min) + 18px);
+    z-index: 30;
+    display: flex;
+    max-height: calc(100vh - var(--tap-min) - 42px);
+    overflow-y: auto;
+    padding: var(--pad);
+    background: var(--bg-sunken);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius);
+    box-shadow: 0 -8px 24px color-mix(in srgb, black 70%, transparent);
+  }
+
+  .advanced-header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap);
+    min-height: var(--tap-min);
+    padding-bottom: var(--gap-sm);
+    background: var(--bg-sunken);
+    color: var(--text-accent);
+    font-size: inherit;
+  }
+
+  .advanced-close {
+    min-height: var(--tap-min);
+    min-width: var(--tap-min);
+    padding-inline: 0.75rem;
+  }
+
+  .mix-primary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .compact-more-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap-min);
+    min-width: var(--tap-min);
+    padding-inline: 0.75rem;
+    font-size: var(--fs-sm);
+  }
+
+  .volume-control {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-height: var(--tap-min);
+  }
+
+  .volume-label {
+    display: inline;
+    color: var(--text-dim);
+    font-size: inherit;
+  }
+
+  .volume-control .meter {
+    width: 100%;
+  }
+
+  .footer {
+    margin-top: 0;
+  }
+
+  .app-nav {
+    left: 50%;
+    right: auto;
+    width: min(100%, 804px);
+    transform: translateX(-50%);
+    gap: 4px;
+    padding: 6px 8px;
+  }
+
+  .app-nav button {
+    min-width: 0;
+    min-height: var(--tap-min);
+    padding: 0.35rem 0.45rem;
+    font-size: var(--fs-sm);
+  }
+
+  .nav-label-full {
+    display: none;
+  }
+
+  .nav-label-compact {
+    display: inline;
+  }
+
 /* minimal: very short viewports — drop visualizer + mix */
 @media (max-height: 420px) {
   .visualizer,
@@ -620,4 +1055,163 @@ select {
   color: var(--text-accent);
   text-shadow: var(--glow);
   font-weight: 600;
+}
+
+
+/* ---- CLIMP full visualizer / immersive mode ---- */
+/*
+ * CLIMP's V screen gives the visualizer four times as much visible space as
+ * playback chrome. At the Tesla 804x638 target this grid resolves to:
+ *   22 track + 22 time + 28 seek + 52 controls = 124px visible chrome
+ *   18px separators / bottom breathing room
+ *   496px visualizer
+ */
+.transport-row {
+  display: grid;
+  grid-template-columns: var(--tap-min) minmax(0, 1fr) var(--tap-min);
+  align-items: center;
+  gap: 8px;
+}
+
+.transport-row > .transport {
+  min-width: 0;
+}
+
+.viz-full-toggle {
+  width: var(--tap-min);
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.viz-full-toggle:active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.viz-full-glyph {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-accent);
+  border-radius: 2px;
+  background: var(--bg-sunken);
+  color: var(--text-accent);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.viz-full-toggle:active .viz-full-glyph {
+  border-color: var(--text-accent);
+  box-shadow: var(--glow-dim);
+}
+
+.immersive-app {
+  width: 100%;
+  max-width: 804px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 8px;
+  display: grid;
+  grid-template-rows: 22px 22px 5px minmax(0, 1fr) 5px 28px 52px 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.immersive-track-line,
+.immersive-time-status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.immersive-track-line {
+  color: var(--text-accent);
+}
+
+.immersive-track-line .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+
+.immersive-time-status {
+  justify-content: space-between;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.immersive-time-status .state {
+  color: var(--playing);
+  font-weight: 700;
+}
+
+.immersive-time-status .state.is-paused {
+  color: var(--warn);
+}
+
+.immersive-app .viz-wrap {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.immersive-app .visualizer {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-color: var(--border-accent);
+}
+
+.immersive-app .viz-name {
+  top: 6px;
+  right: 6px;
+}
+
+.immersive-seek-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.immersive-seek-row .meter {
+  width: 100%;
+}
+
+.immersive-controls {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.immersive-controls button {
+  min-width: 0;
+  min-height: 52px;
+  height: 52px;
+  padding: 0 4px;
+  overflow: hidden;
+  white-space: nowrap;
+  background: var(--bg-sunken);
+  font-size: inherit;
+}
+
+.immersive-controls .immersive-play {
+  color: var(--text-accent);
+  border-color: var(--border-accent);
+  background: var(--row-active);
+  font-weight: 700;
 }

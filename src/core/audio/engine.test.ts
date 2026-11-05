@@ -50,6 +50,21 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("audio engine regressions", () => {
+  it("plays direct podcast sources without a worklet and keeps pause/seek functional", async () => {
+    const onTrackEnd = vi.fn();
+    const previousContext = Context.current;
+    const engine = new AudioEngine({ onTrackEnd });
+    await engine.load({ ...track("episode"), provider: "podcast" }, { ...source("episode.wav"), direct: true });
+    expect(Context.current).toBe(previousContext);
+    expect(FakeAudio.all[1].src).toBe("episode.wav");
+    FakeAudio.all[1].currentTime = 21;
+    expect(engine.getPosition()).toBe(21);
+    engine.pause(); expect(engine.snapshot().state).toBe("paused");
+    engine.seek(5); expect(FakeAudio.all[1].currentTime).toBe(5);
+    await engine.play(); expect(engine.snapshot().state).toBe("playing");
+    FakeAudio.all[1].dispatchEvent(new Event("ended"));
+    expect(onTrackEnd).toHaveBeenCalledWith(false);
+  });
   it("loads the worklet beneath the deployment subpath", async () => {
     const engine = new AudioEngine(); await engine.init();
     expect(Context.current.audioWorklet.addModule).toHaveBeenCalledWith("https://example.test/cliamp-web/worklets/wsola.js");

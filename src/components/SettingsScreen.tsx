@@ -64,22 +64,26 @@ export default function SettingsScreen() {
             </div>
           ) : (
             plugins.map((p) => (
-              <div className="row" key={p.name} style={{ cursor: "default" }}>
-                <span className={`marker ${p.enabled ? "is-fav" : ""}`} aria-hidden>
+              <button
+                type="button"
+                className={`plugin-row ${p.enabled ? "is-enabled" : ""}`}
+                key={p.name}
+                aria-pressed={p.enabled}
+                onClick={() => toggle(p.name)}
+              >
+                <span className="plugin-marker" aria-hidden>
                   {p.enabled ? "●" : "○"}
                 </span>
-                <span className="title">
-                  {p.meta.name}
-                  {p.meta.description ? <span className="dim"> — {p.meta.description}</span> : null}
+                <span className="plugin-copy">
+                  <span className="plugin-name">{p.meta.name}</span>
+                  {p.meta.description ? (
+                    <span className="plugin-description">{p.meta.description}</span>
+                  ) : null}
                 </span>
-                <button
-                  className="btn-accent"
-                  style={{ minHeight: "var(--tap-min)" }}
-                  onClick={() => toggle(p.name)}
-                >
-                  {p.enabled ? "Disable" : "Enable"}
-                </button>
-              </div>
+                <span className="plugin-state">
+                  {p.enabled ? "ENABLED" : "DISABLED"}
+                </span>
+              </button>
             ))
           )}
         </div>
@@ -90,7 +94,7 @@ export default function SettingsScreen() {
             <div className="dim" style={{ fontFamily: "var(--mono)" }}>— no log output —</div>
           ) : (
             logs.map((line, i) => (
-              <div key={i} className="dim" style={{ fontFamily: "var(--mono)", fontSize: "0.72rem", whiteSpace: "pre-wrap" }}>
+              <div key={i} className="dim" style={{ fontFamily: "inherit", whiteSpace: "pre-wrap" }}>
                 {line}
               </div>
             ))
