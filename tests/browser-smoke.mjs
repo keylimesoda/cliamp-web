@@ -110,6 +110,33 @@ try {
     await page.evaluate(() => new Promise(requestAnimationFrame));
     await page.screenshot({ path: join(screenshots, `${name.toLowerCase()}-804x638.png`) });
   }
+  // Theme selection is reachable from playback and Settings without stopping audio.
+  await page.getByRole("button", { name: "Choose theme: winamp", exact: true }).tap();
+  const themePicker = page.getByRole("combobox", { name: "Theme", exact: true });
+  await expect(themePicker).toBeInViewport();
+  await expect(themePicker.locator("option")).toHaveCount(22);
+  const themeBox = await themePicker.boundingBox();
+  expect(themeBox.height).toBeGreaterThanOrEqual(56);
+  await themePicker.selectOption("catppuccin");
+  await expect(themePicker).toHaveValue("catppuccin");
+  expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--accent"))).toBe("#89b4fa");
+  await page.getByRole("button", { name: "♫ Now Playing", exact: true }).tap();
+  await expect(page.getByRole("button", { name: "Choose theme: catppuccin", exact: true })).toBeVisible();
+  await expect(page.locator(".time-status .state")).toHaveText("Playing");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Choose theme: catppuccin", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "⚙ Settings", exact: true }).tap();
+  await expect(themePicker).toHaveValue("catppuccin");
+  await expect(page.getByRole("heading", { name: "Plugins", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Disable", exact: true }).last().tap();
+  await expect(page.getByRole("button", { name: "Enable", exact: true })).toBeVisible();
+  await themePicker.selectOption("catppuccin-latte");
+  expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--bg"))).toBe("#eff1f5");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await themePicker.selectOption("catppuccin");
+  await page.locator(".list").evaluate((el) => { el.scrollTop = 0; });
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await page.screenshot({ path: join(screenshots, "theme-picker-804x638.png") });
   expect(errors).toEqual([]);
-  console.log(JSON.stringify({ passed: true, viewport: "804×638 touch, DPR 1.96", checks: ["subpath worklet", "three-track automatic progression", "pause", "playlist reversal", "previous EQ preset", "visualizer persistence", "legacy None migration", "non-CORS media progression", "rating success/failure and metadata retention", "no horizontal overflow", "no uncaught JS errors"], screenshots }));
+  console.log(JSON.stringify({ passed: true, viewport: "804×638 touch, DPR 1.96", checks: ["subpath worklet", "three-track automatic progression", "pause", "playlist reversal", "previous EQ preset", "visualizer persistence", "legacy None migration", "non-CORS media progression", "rating success/failure and metadata retention", "22-theme picker via playback and Settings", "live theme application without stopping playback", "theme persistence", "light and dark themes", "plugin toggles remain accessible", "no horizontal overflow", "no uncaught JS errors"], screenshots }));
 } finally { await context.close(); await browser.close(); }

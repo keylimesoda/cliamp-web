@@ -65,7 +65,8 @@ Vendored from cliamp and loaded at boot:
 - **webhook** — POSTs track info on track change (no-op unless a `url` is
   configured).
 
-The **Plugins** screen lists them with enable/disable and a live log.
+The **Settings** screen groups Appearance and Plugins; the Plugins section lists
+them with enable/disable and a live log.
 Toggle choices are not persisted; there is no plugin source import/install UI.
 `cliamp.queue`, image/layout/ui/vis APIs and custom visualizer hooks are absent.
 `p:publish` only logs; stored bindings and commands are never invoked.

@@ -141,7 +141,7 @@ Native references: [playlists](https://github.com/bjarneo/cliamp/blob/v2.4.0/doc
 | Built-in visualizer names | Implemented | All 34 native names plus None in native order; registry and rendering tests. Numeric preferences migrate to names. |
 | Visualizer fidelity / analysis | Partial | Character-grid adaptations, not verified pixel/algorithm parity. Stereo meters simulate L/R from a mono tap; FFT uses ten bands even for modes whose native drivers request more. YinYang uses Braille and simplified path motion. |
 | Visualizer picker / fullscreen / low power | Missing | Tap-to-cycle only. No direct picker, fullscreen visualizer, low-power preference or background playback guarantee. |
-| Bundled themes | Implemented | All 22 vendored TOMLs match tagged native theme files byte-for-byte. Runtime selection/persistence. No user theme import/picker/preview. |
+| Bundled themes | Implemented | All 22 vendored TOMLs match tagged native theme files byte-for-byte. Settings → Appearance has a named picker and palette preview, reachable directly from Now Playing. Selection applies immediately and persists. Browser checks cover all options, light/dark palettes, persistence and continued playback. User theme import is absent. |
 | LRCLIB and synced LRC | Partial | Lookup, repeated timestamps, millisecond precision, sorting and auto-scroll exist. No embedded/sidecar loader, NetEase/provider fallback, retry control, timing-offset control or native query cleaning. |
 | Metadata/cover/info screens | Partial | Title, artist, time and MediaSession artwork fields; no full metadata screen, album headers or in-app cover pane. |
 | Touch interface | Partial | Primary transport/settings controls and fixture viewport verified. Several stars/pins are still small nested span targets; EQ boxes are inert and the thin meter's enlarged pseudo-element is clipped by its container. This is not a full accessibility/touch audit. |
@@ -158,7 +158,7 @@ Native references: [plugin API](https://github.com/bjarneo/cliamp/blob/v2.4.0/do
 [remote control](https://github.com/bjarneo/cliamp/blob/v2.4.0/docs/remote-control.md),
 [headless mode](https://github.com/bjarneo/cliamp/blob/v2.4.0/docs/headless.md).
 Browser evidence: `src/lua/host.ts`, `src/lua/vm.ts`, `src/store/plugins.ts`,
-`src/components/PluginsScreen.tsx`, `src/core/audio/mediasession.ts`, `public/sw.js`.
+`src/components/SettingsScreen.tsx`, `src/core/audio/mediasession.ts`, `public/sw.js`.
 
 | Feature | Status | Finding |
 | --- | --- | --- |

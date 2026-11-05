@@ -1,11 +1,15 @@
 import { usePluginStore } from "../store/plugins";
+import { usePlayerStore } from "../store/player";
+import { THEME_NAMES, THEMES } from "../themes/engine";
 
 /**
- * Plugins screen — lists the Lua plugins (bundled + any loaded), toggles them
- * on/off, and shows their live log output (cliamp.log / load errors) plus the
- * latest transient status message (cliamp.message / cliamp.notify).
+ * Appearance settings and Lua plugins share the less frequently used controls.
+ * Theme changes apply immediately and use the player's existing persistence.
  */
-export default function PluginsScreen() {
+export default function SettingsScreen() {
+  const theme = usePlayerStore((s) => s.theme);
+  const setTheme = usePlayerStore((s) => s.setTheme);
+  const colors = THEMES[theme] ?? THEMES.winamp;
   const plugins = usePluginStore((s) => s.plugins);
   const logs = usePluginStore((s) => s.logs);
   const status = usePluginStore((s) => s.status);
@@ -14,11 +18,37 @@ export default function PluginsScreen() {
   return (
     <div className="app">
       <div className="app-titlebar">
-        <h1 className="app-title">P L U G I N S</h1>
-        <span className="screen-label">Lua hooks</span>
+        <h1 className="app-title">S E T T I N G S</h1>
+        <span className="screen-label">Appearance &amp; plugins</span>
       </div>
 
+      <section className="panel appearance-settings" aria-labelledby="appearance-heading">
+        <div className="theme-picker">
+          <div>
+            <h2 id="appearance-heading">Appearance</h2>
+            <label htmlFor="theme-picker">Theme</label>
+          </div>
+          <select id="theme-picker" value={theme} onChange={(e) => setTheme(e.target.value)}>
+            {THEME_NAMES.map((name) => (
+              <option key={name} value={name}>
+                {name.split("-").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="theme-preview" aria-hidden="true" style={{ background: colors.bg, color: colors.brightFg }}>
+          <span style={{ color: colors.accent }}>CLIAMP</span>
+          <span className="theme-swatches">
+            {[colors.accent, colors.brightFg, colors.fg, colors.green, colors.yellow, colors.red].map((color, i) => (
+              <span key={i} style={{ background: color }} />
+            ))}
+          </span>
+          <span style={{ color: colors.green }}>♫</span>
+        </div>
+      </section>
+
       <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
+        <h2 className="settings-heading">Plugins</h2>
         {status ? (
           <div className="row" style={{ cursor: "default" }}>
             <span className="marker" aria-hidden>▸</span>

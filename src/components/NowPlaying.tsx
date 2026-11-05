@@ -2,7 +2,6 @@ import { useState } from "react";
 import { usePlayerStore } from "../store/player";
 import { EQ_BANDS_HZ } from "../core/eq";
 import { VOLUME_MAX_DB, VOLUME_MIN_DB } from "../core/audio/engine";
-import { THEME_NAMES } from "../themes/engine";
 import { useFavoritesStore } from "../store/favorites";
 import { usePluginStore } from "../store/plugins";
 import DragMeter from "./DragMeter";
@@ -41,7 +40,7 @@ function trackName(t: Track | null): string {
   return t.title;
 }
 
-export default function NowPlaying() {
+export default function NowPlaying({ onOpenAppearance }: { onOpenAppearance: () => void }) {
   const s = usePlayerStore();
   const favorites = useFavoritesStore();
   const [scrubPos, setScrubPos] = useState<number | null>(null);
@@ -135,16 +134,13 @@ export default function NowPlaying() {
             <span className="key-pill" onClick={() => s.cycleRepeat()} role="button">
               Repeat {s.repeat === "off" ? "Off" : s.repeat === "all" ? "All" : "One"}
             </span>
-            <span
+            <button
               className="key-pill"
-              role="button"
-              onClick={() => {
-                const i = THEME_NAMES.indexOf(s.theme);
-                s.setTheme(THEME_NAMES[(i + 1) % THEME_NAMES.length]);
-              }}
+              onClick={onOpenAppearance}
+              aria-label={`Choose theme: ${s.theme}`}
             >
               Theme {s.theme}
-            </span>
+            </button>
             <span className="key-pill" onClick={() => setShowLyrics((v) => !v)} role="button">
               Lyrics {showLyrics ? "On" : "Off"}
             </span>

@@ -23,8 +23,8 @@ The exact native release and commit are recorded in [upstream.json](upstream.jso
 | --- | --- |
 | ![Plugins](docs/screenshots/plugins.png) | ![Radio](docs/screenshots/radio.png) |
 | Lua plugins with live log | Internet radio (Radio Browser) |
-| ![Servers](docs/screenshots/servers.png) | |
-| Self-hosted music servers | |
+| ![Servers](docs/screenshots/servers.png) | ![Settings](docs/screenshots/v2.4.0/theme-picker-804x638.png) |
+| Self-hosted music servers | Theme picker and plugins |
 
 ## Features
 
@@ -48,7 +48,9 @@ The exact native release and commit are recorded in [upstream.json](upstream.jso
   playback, read tracks, and surface status messages. Four bundled:
   `auto-eq` (genre→EQ preset), `now-playing` (browser storage), `status-messages`,
   `webhook`. See [docs/lua-plugins.md](docs/lua-plugins.md).
-- **Themes** — 22 vendored cliamp themes as runtime CSS variables.
+- **Themes** — choose any of the 22 bundled themes in **Settings → Appearance**.
+  Changes apply immediately and are saved; the Theme button on Now Playing
+  opens the picker directly. Plugins and their logs share the Settings screen.
 - **PWA** — installable, service-worker app-shell caching, fullscreen
   landscape manifest.
 
@@ -146,7 +148,7 @@ src/
   viz/         34 character-grid visualizer adaptations, canvas drawer, registry
   store/       player, servers, history, plugins, viz (zustand)
   components/  NowPlaying, RadioBrowser, PodcastBrowser, ServerBrowser,
-               ServersScreen, PluginsScreen, LyricsOverlay, Visualizer, …
+               ServersScreen, SettingsScreen, LyricsOverlay, Visualizer, …
 public/        manifest, service worker, icons, wsola worklet
 docs/          engine-notes, lua-plugins, providers-3, screenshots
 ```

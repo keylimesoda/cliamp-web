@@ -6,7 +6,7 @@ import RadioBrowser from "./components/RadioBrowser";
 import PodcastBrowser from "./components/PodcastBrowser";
 import ServersScreen from "./components/ServersScreen";
 import LocalScreen from "./components/LocalScreen";
-import PluginsScreen from "./components/PluginsScreen";
+import SettingsScreen from "./components/SettingsScreen";
 import "./providers/radio"; // side-effect: registers the radio provider
 import "./providers/podcast"; // side-effect: registers the podcast provider
 import "./providers/navidrome"; // side-effect: registers the navidrome provider
@@ -16,7 +16,7 @@ import "./providers/audiobookshelf"; // side-effect: registers audiobookshelf
 import "./providers/lyrion"; // side-effect: registers lyrion (LMS)
 import { applyTheme } from "./themes/engine";
 
-type Screen = "now" | "radio" | "podcast" | "servers" | "local" | "plugins";
+type Screen = "now" | "radio" | "podcast" | "servers" | "local" | "settings";
 
 const NAV = [
   { id: "now" as const, label: "♫ Now Playing" },
@@ -24,13 +24,13 @@ const NAV = [
   { id: "podcast" as const, label: "🎙 Podcasts" },
   { id: "servers" as const, label: "🗄 Servers" },
   { id: "local" as const, label: "◷ Local" },
-  { id: "plugins" as const, label: "⚙ Plugins" },
+  { id: "settings" as const, label: "⚙ Settings" },
 ];
 
-function renderScreen(screen: Screen) {
+function renderScreen(screen: Screen, openAppearance: () => void) {
   switch (screen) {
     case "now":
-      return <NowPlaying />;
+      return <NowPlaying onOpenAppearance={openAppearance} />;
     case "radio":
       return <RadioBrowser />;
     case "podcast":
@@ -39,8 +39,8 @@ function renderScreen(screen: Screen) {
       return <ServersScreen />;
     case "local":
       return <LocalScreen />;
-    case "plugins":
-      return <PluginsScreen />;
+    case "settings":
+      return <SettingsScreen />;
   }
 }
 
@@ -72,7 +72,7 @@ export default function App() {
 
   return (
     <>
-      {renderScreen(screen)}
+      {renderScreen(screen, () => setScreen("settings"))}
       <nav
         style={{
           position: "fixed",
