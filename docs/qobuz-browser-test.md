@@ -34,8 +34,11 @@ same thing as a separately registered/approved cliamp-web OAuth client.
 
 Login, API calls and audio requests run in the car's browser. A validated
 personal session and selected quality are stored in that browser's
-localStorage. Neither is uploaded to GitHub or a companion. Signed audio URLs
-are resolved at playback instead of being persisted in playlists.
+localStorage, not in repository files or build artifacts. The OAuth return
+navigates through the hosting origin, so callback parameters are part of that
+navigation; the app clears them from its URL after processing. Code exchange
+and authenticated API requests go directly to Qobuz. Signed audio URLs are
+resolved at playback instead of being persisted in playlists.
 
 ## Hosted callback and fallback
 
