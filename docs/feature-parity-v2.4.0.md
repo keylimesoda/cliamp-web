@@ -50,7 +50,7 @@ An implemented client does not imply its real server has been tested.
 | --- | --- |
 | YinYang visualizer | Added a Braille/canvas adaptation of the koi, lily pad, lotus, onset reactions, circular and wide-strip paths. Uses simplified path pacing and rendering; not pixel-identical to native sextants. Grid/resize/pause tests and browser capture. |
 | Ethereal visualizer | Added drifting value-noise clouds and reactive stars using the shared palette. Browser capture and grid/resize/pause tests; star layout is deterministic but not identical to Go's RNG. |
-| Previous EQ preset | Added a touch button; forward/backward wrap across built-in presets. Browser test. Native's saved Custom slot remains a gap. |
+| Previous EQ preset | Named preset popup above the bands replaces blind cycling; existing cycle API still wraps across built-ins. A separate saved Custom slot survives preset changes and reloads. Unit and touch-browser tests. |
 | Playlist reversal | Added model operation and touch button. Preserves current track and queued identities; shuffle retains its active play order. Unit and browser tests. |
 | Playback recovery | Added bounded reconnect attempts at 1/2/4/8/16 seconds, offline wait, stall detection, cancellation on pause/new selection, and manual Retry after exhaustion. Recovery unit tests; provider outage/stall behavior has not yet been browser-fixture tested. |
 | Spoken-audio progress | Added per-podcast-episode and per-Audiobookshelf-file progress, five-second rewind, first-15-second restart, played/resume labels and completion/replay behavior. Unit and podcast browser checks. Browser storage only; no cross-device sync or Audiobookshelf server progress write. |
@@ -82,11 +82,11 @@ Browser evidence: `src/core/audio/engine.ts`, `wsola.test.ts`,
 
 | Feature | Status | Finding |
 | --- | --- | --- |
-| Play/pause, previous/next, finite seeking, volume | Implemented | Touch controls and MediaSession adapter; native media playback/automatic progression tested with fixture WAVs. |
+| Play/pause, previous/next, finite seeking, volume | Implemented | Touch controls and MediaSession adapter; native media playback/automatic progression tested with fixture WAVs. Player volume is in MORE → Playback options, with a 0 dB reset; it is omitted from main and immersive controls. |
 | Stop/reset | Missing | No Stop control; Lua `stop` currently maps to pause. |
 | Automatic next / repeat / shuffle | Implemented | Album/search selections from Navidrome, Audiobookshelf and podcasts now load contextual track lists. Queue precedence, album-cursor continuation, repeat-one, natural end and three-track progression are covered by model/browser tests. Other provider selections may still be detached. |
 | Race-safe manual selection and preload changes | Implemented | Resolver/load/preload generations and aborts; unit tests cover late replies and pause during resolution. |
-| Ten-band parametric EQ and built-in curves | Partial | Frequencies, Q, gains and presets ported. UI band boxes only display gains; there are no individual gain controls or saved Custom curve. Non-CORS playback bypasses DSP entirely. |
+| Ten-band parametric EQ and built-in curves | Partial | Frequencies, Q, gains and presets ported. Ten touch sliders adjust −12 to +12 dB, with a named preset popup and a separate saved Custom slot. Changes and the saved curve persist locally. Non-CORS/direct playback bypasses DSP; the EQ panel identifies an unavailable source while retaining the curve. |
 | Playback speed 0.25–2× / pitch preservation | Partial | WSOLA algorithm and store setter exist. No speed control is exposed in the touch UI. Source time/end events still run on the media element/buffer's clock; non-1× timeline, overflow/drain and track-boundary correctness need end-to-end work. Unit DSP tests do not establish native timing parity. |
 | Mono output | Partial | Web Audio downmix/upmix and touch toggle exist; actual L/R output not measured. Non-CORS fallback cannot apply mono. |
 | Gapless playback | Partial | Best-effort fetch/decode bridge; no sample-accurate or audibly gapless guarantee. Limited to known durations ≤10 minutes and encoded downloads ≤32 MiB to bound car memory. Deferred/late preloads tested. Decoder delay/padding trimming and native preload scheduling are not ported. |
@@ -163,7 +163,7 @@ Native references: [playlists](https://github.com/bjarneo/cliamp/blob/v2.4.0/doc
 | Bundled themes | Implemented | All 22 vendored TOMLs match tagged native theme files byte-for-byte. Settings → Appearance has a named picker and palette preview, reachable directly from Now Playing. Selection applies immediately and persists. Browser checks cover all options, light/dark palettes, persistence and continued playback. User theme import is absent. |
 | LRCLIB and synced LRC | Partial | Lookup, repeated timestamps, millisecond precision, sorting and auto-scroll exist. No embedded/sidecar loader, NetEase/provider fallback, retry control, timing-offset control or native query cleaning. |
 | Metadata/cover/info screens | Partial | Title, artist, time and MediaSession artwork fields; no full metadata screen, album headers or in-app cover pane. |
-| Touch interface | Partial | Primary transport/settings controls and fixture viewport verified. Several stars/pins are still small nested span targets; EQ boxes are inert and the thin meter's enlarged pseudo-element is clipped by its container. This is not a full accessibility/touch audit. |
+| Touch interface | Partial | Primary transport/settings controls and fixture viewport verified. Several stars/pins are still small nested span targets; EQ has touch sliders and a modal picker; the thin seek meter's enlarged pseudo-element is clipped by its container. This is not a full accessibility/touch audit. |
 | Keyboard navigation/help | Missing | No equivalent command keymap, global hotkeys or full keyboard-operable replacement for span buttons. Intentional touch focus does not make this parity. |
 
 Browser source evidence: `src/core/playlist.ts`, `src/store/history.ts`,
@@ -193,30 +193,28 @@ Browser evidence: `src/lua/host.ts`, `src/lua/vm.ts`, `src/store/plugins.ts`,
 | MediaSession | Partial | Basic metadata/control adapter is implemented. No native MPRIS/Now Playing parity claim; real Tesla steering-wheel/system behavior untested. |
 | Static PWA | Partial | Install manifest, versioned app-shell worker, relative assets/worklet. Media/APIs are network-only. No offline media or offline regression test, and no guarantee of persistence/installation on Tesla. |
 
-## Recommended follow-up order
+## Recommended follow-up order for Tesla
 
-1. **Repair provider contracts and setup.** Add token input/editing, verify
-   Jellyfin/Emby auth and routes, replace ABS/LMS contract guesses, and add
-   native-shaped fixtures plus optional live-server tests. This closes features
-   already visible in the UI but currently broken.
-2. **Make playback/library controls complete.** Load albums/search results as
-   playlists, expose queue editing, stop, speed and custom EQ; add saved
-   playlists and URL/file import. Measure non-1× timing and track transitions.
-3. **Finish useful state.** Durable active queue resume, proper history semantics,
-   Audiobookshelf server-side progress, provider favorites/reporting, and
-   subscription batch actions.
-4. **Treat plugin parity as its own project.** Isolate/bound execution first;
-   specify the supported native API/events, then implement HTTP/timers, queue
-   APIs, import/configuration and custom visualizers. Keep unsupported APIs
-   explicit rather than silently stubbing them.
-5. **Then decide on a companion.** OAuth/stream extraction/native codec coverage
-   and account providers need source-specific design. A static-client-only
-   update cannot be described as having all native sources.
+1. **Restore the whole listening session.** Keep the active playlist, play-next
+   queue, order and cursor across browser restarts. Per-episode/file progress
+   and single-track resume already exist; this closes the remaining session gap.
+2. **Expose spoken-audio controls.** Add large rewind/forward buttons and a
+   speed picker for podcasts and books. Relative seek and speed APIs already
+   exist; verify non-1× timing and transitions before presenting them as ready.
+3. **Pick visualizers by name.** A popup avoids cycling through 34 modes to
+   reach a favorite. All 34 modes are already present; rendering cleanup is a
+   separate deferred task. Native cliamp also has a visualizer picker.
+4. **Collect latest/unplayed episodes from saved shows.** Build a convenient
+   departure queue from existing subscriptions, progress and played markers.
+   This is a browser convenience built on existing functionality.
+5. **Add station and podcast-feed URLs directly.** Allow sources missing from
+   search to be saved and reused through the existing favorites UI.
 
-The first four groups contain substantial browser-feasible work; they should
-not be dismissed as intrinsic browser limitations. Actual Tesla testing should
-follow the isolated fixture checks, especially for activation, long sessions,
-backgrounding, audio continuity and control target sizes.
+Real-account Plex and browser-only Qobuz validation remain separate provider
+work. Keep unimplemented providers hidden. Further plugin parity needs its own
+scope: bounded execution, native API/events, HTTP/timers, queue APIs and custom
+visualizers. Actual Tesla testing should follow fixture checks, especially for
+activation, long sessions, backgrounding, audio continuity and touch targets.
 
 ## Reproducing this audit's checks
 

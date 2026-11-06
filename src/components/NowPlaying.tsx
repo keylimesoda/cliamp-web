@@ -2,7 +2,7 @@ import QueueScreen from "./QueueScreen";
 import ProgressLabel from "./ProgressLabel";
 import { useState } from "react";
 import { usePlayerStore } from "../store/player";
-import { EQ_BANDS_HZ } from "../core/eq";
+import EqControls from "./EqControls";
 import { VOLUME_MAX_DB, VOLUME_MIN_DB } from "../core/audio/engine";
 import { useFavoritesStore } from "../store/favorites";
 import { usePluginStore } from "../store/plugins";
@@ -78,7 +78,6 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
   const live = s.track?.stream === true || s.track?.live === true;
   const shownPos = scrubPos ?? s.position;
   const seekRatio = s.duration > 0 ? shownPos / s.duration : 0;
-  const volRatio = (s.volumeDb - VOLUME_MIN_DB) / (VOLUME_MAX_DB - VOLUME_MIN_DB);
 
   if (showQueue) return <QueueScreen onClose={() => setShowQueue(false)} />;
 
@@ -143,12 +142,6 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
           <button onClick={() => void s.next()} aria-label="Next track">
             <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
           </button>
-          <button onClick={() => s.setVolume(s.volumeDb - 1)} aria-label="Volume down">
-            VOL -
-          </button>
-          <button onClick={() => s.setVolume(s.volumeDb + 1)} aria-label="Volume up">
-            VOL +
-          </button>
           <button onClick={() => setHideImmersiveTitle((v) => !v)} aria-label="Toggle track title or source">
             {hideImmersiveTitle ? "TITLE" : "SOURCE"}
           </button>
@@ -203,7 +196,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
         )}
 
         <div className="transport-row">
-          <div aria-hidden />
+          <button className="compact-more-toggle" onClick={() => setShowAdvanced(true)} aria-expanded={showAdvanced} aria-controls="advanced-controls">MORE</button>
           <div className="transport">
             <button onClick={() => void s.prev()} aria-label="Previous">
               <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
@@ -241,24 +234,11 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
                 Close
               </button>
             </div>
-            <div className="eq-bands">
-              {EQ_BANDS_HZ.map((hz, i) => (
-                <div className="eq-band" key={hz} title={`${hz} Hz`}>
-                  <span className="hz">{hz >= 1000 ? `${hz / 1000}k` : hz}</span>
-                  <span className="db">
-                    {s.eqGains[i] > 0 ? "+" + s.eqGains[i] : s.eqGains[i]}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <EqControls />
             <div className="help-row">
               <button className="key-pill" onClick={() => { setShowAdvanced(false); setShowQueue(true); }} aria-label="Open queue">
                 Queue{s.queueCount ? ` (${s.queueCount})` : ""}
               </button>
-              <button className="key-pill" onClick={() => s.cyclePreset(-1)} aria-label="Previous EQ preset">EQ ◀</button>
-              <span className="key-pill" onClick={() => s.cyclePreset()} role="button">
-                EQ {s.eqPreset}
-              </span>
               <span className="key-pill" onClick={() => s.setMono(!s.mono)} role="button">
                 {s.mono ? "Mono" : "Stereo"}
               </span>
@@ -284,29 +264,14 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
                 </label>
               ) : null}
             </div>
+            <div className="volume-control">
+              <label className="volume-label" htmlFor="player-volume">Player volume ({Math.round(s.volumeDb)} dB)</label>
+              <input id="player-volume" type="range" aria-label="Player volume" min={VOLUME_MIN_DB} max={VOLUME_MAX_DB} step="1" value={s.volumeDb}
+                onChange={(e) => s.setVolume(Number(e.target.value))} />
+              <button onClick={() => s.setVolume(0)} aria-label="Reset player volume">Reset 0 dB</button>
+            </div>
           </div>
 
-          <div className="mix-primary">
-            <div className="volume-control">
-              <span className="volume-label">VOL</span>
-              <DragMeter
-                className="meter-green"
-                value={volRatio}
-                onRatio={(r) =>
-                  s.setVolume(VOLUME_MIN_DB + r * (VOLUME_MAX_DB - VOLUME_MIN_DB))
-                }
-                label="Volume"
-              />
-            </div>
-            <button
-              className="compact-more-toggle"
-              onClick={() => setShowAdvanced(true)}
-              aria-expanded={showAdvanced}
-              aria-controls="advanced-controls"
-            >
-              MORE
-            </button>
-          </div>
         </div>
       </section>
 

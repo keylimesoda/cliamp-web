@@ -34,10 +34,17 @@ normal navigation until a session has been validated.
 ## Features
 
 - **Now Playing** — touch transport (prev / play-pause / next), seek bar,
-  built-in 10-band EQ presets, mono, shuffle/repeat, volume,
+  a 10-band EQ with touch sliders, a preset picker and a saved custom curve, mono, shuffle/repeat,
   queue and playlist manager under **MORE → Queue**, and **34 real-time visualizer modes** — tap the
   visualizer to cycle modes.
-- **v2.4 updates** — YinYang and Ethereal visualizers, previous EQ preset,
+- **Player volume** — under **MORE → Playback options**, with a reset to
+  0 dB. Main and full-screen playback leave listening volume to the car.
+- **Personal EQ** — open **MORE → EQ preset** to pick a curve. Drag an individual
+  frequency slider up/down (−12 to +12 dB), then tap **Save custom EQ**.
+  Choose **Saved custom EQ** in the picker to recall it after trying other presets.
+  The saved curve stays in this browser across reloads; saving again replaces it.
+  EQ requires audio that supports the browser DSP path; non-CORS streams bypass it.
+- **v2.4 updates** — YinYang and Ethereal visualizers, named EQ preset selection,
   playlist reversal, current-track Navidrome ratings, radio channel song lists
   and listener counts, and corrected lyrics/Plex metadata.
 - **Driving-friendly listening** — bounded connection recovery, per-episode and

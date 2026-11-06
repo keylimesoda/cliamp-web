@@ -40,6 +40,7 @@ export interface EngineSnapshot {
   speed: number;
   mono: boolean;
   eqGains: number[];
+  dspAvailable: boolean;
 }
 
 export class AudioEngine {
@@ -484,6 +485,7 @@ export class AudioEngine {
       speed: this.speed,
       mono: this.mono,
       eqGains: [...this.eqGains],
+      dspAvailable: this.element !== this.plainElement,
     };
   }
 

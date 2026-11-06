@@ -19,7 +19,7 @@ import {
   updateMediaSession,
   type MediaSessionHandlers,
 } from "../core/audio/mediasession";
-import { EQ_PRESET_CYCLE, presetGains } from "../core/eq";
+import { clampDb, EQ_BANDS_HZ, EQ_PRESET_CYCLE, presetGains } from "../core/eq";
 import { Playlist } from "../core/playlist";
 import type {
   PlaybackState,
@@ -123,12 +123,19 @@ export function getPlaylist(): Playlist | null {
 const SETTINGS_KEY = "cliamp-web:settings";
 const RESUME_KEY = "cliamp-web:resume";
 
+function validEqGains(value: unknown): number[] | null {
+  if (!Array.isArray(value) || value.length !== EQ_BANDS_HZ.length
+    || !value.every((gain) => typeof gain === "number" && Number.isFinite(gain))) return null;
+  return value.map(clampDb);
+}
+
 interface PersistedSettings {
   volumeDb?: number;
   speed?: number;
   mono?: boolean;
   eqGains?: number[];
   eqPreset?: string;
+  customEqGains?: number[] | null;
   shuffle?: ShuffleMode;
   repeat?: RepeatMode;
   theme?: string;
@@ -163,6 +170,7 @@ function persistSettings(): void {
     mono: s.mono,
     eqGains: s.eqGains,
     eqPreset: s.eqPreset,
+    customEqGains: s.customEqGains,
     shuffle: s.shuffle,
     repeat: s.repeat,
     theme: s.theme,
@@ -200,6 +208,8 @@ export interface PlayerState {
   mono: boolean;
   eqGains: number[];
   eqPreset: string;
+  customEqGains: number[] | null;
+  dspAvailable: boolean;
   theme: string;
   // playlist
   tracks: Track[];
@@ -236,6 +246,7 @@ export interface PlayerState {
   setSpeed: (s: number) => void;
   setMono: (on: boolean) => void;
   setEqGains: (gains: number[]) => void;
+  saveCustomEq: () => void;
   applyPreset: (name: string) => void;
   cyclePreset: (direction?: 1 | -1) => void;
   reversePlaylist: () => void;
@@ -414,6 +425,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   mono: false,
   eqGains: new Array(10).fill(0),
   eqPreset: "Flat",
+  customEqGains: null,
+  dspAvailable: true,
   theme: "winamp",
   tracks: [],
   currentDisplay: -1,
@@ -469,18 +482,23 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         speed: s.speed,
         mono: s.mono,
         eqGains: s.eqGains,
+        dspAvailable: s.dspAvailable,
       });
     });
 
     // restore persisted settings
     const saved = readJson<PersistedSettings>(SETTINGS_KEY);
     if (saved) {
+      const gains = validEqGains(saved.eqGains) ?? new Array(EQ_BANDS_HZ.length).fill(0);
+      const custom = validEqGains(saved.customEqGains)
+        ?? (saved.eqPreset === "Custom" && saved.customEqGains === undefined ? validEqGains(saved.eqGains) : null);
       set({
         volumeDb: saved.volumeDb ?? 0,
         speed: saved.speed ?? 1,
         mono: saved.mono ?? false,
-        eqGains: saved.eqGains ?? new Array(10).fill(0),
+        eqGains: gains,
         eqPreset: saved.eqPreset ?? "Flat",
+        customEqGains: custom,
         shuffle: saved.shuffle ?? "off",
         repeat: saved.repeat ?? "off",
         theme: saved.theme ?? "winamp",
@@ -488,7 +506,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       engine.setVolumeDb(saved.volumeDb ?? 0);
       engine.setSpeed(saved.speed ?? 1);
       engine.setMono(saved.mono ?? false);
-      if (saved.eqGains) engine.setEqGains(saved.eqGains);
+      engine.setEqGains(gains);
       playlist.setShuffle(saved.shuffle ?? "off");
       playlist.setRepeat(saved.repeat ?? "off");
     }
@@ -656,15 +674,21 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     persistSettings();
   },
   setEqGains(gains) {
-    engine?.setEqGains(gains);
-    set({ eqPreset: "Custom" });
+    const valid = validEqGains(gains);
+    if (!valid) return;
+    engine?.setEqGains(valid);
+    set({ eqGains: valid, eqPreset: "Custom" });
+    persistSettings();
+  },
+  saveCustomEq() {
+    set({ customEqGains: [...get().eqGains], eqPreset: "Custom" });
     persistSettings();
   },
   applyPreset(name) {
-    const g = presetGains(name);
+    const g = name === "Custom" ? get().customEqGains : presetGains(name);
     if (!g) return;
     engine?.setEqGains([...g]);
-    set({ eqPreset: name });
+    set({ eqGains: [...g], eqPreset: name });
     persistSettings();
   },
   cyclePreset(direction = 1) {
