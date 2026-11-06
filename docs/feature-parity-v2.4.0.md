@@ -114,7 +114,7 @@ Browser evidence: `src/providers/`, `src/components/*Browser.tsx`,
 | Source/feature | Status | Finding |
 | --- | --- | --- |
 | cliamp radio channels / song playlists | Implemented | Live/song paths and stats exist. Fixture-tested; live API CORS and production stations not revalidated. |
-| Radio Browser country/tag/name search and ordering | Partial | Country pins, tags, searches and five ordering options exist. Fixed directory hostname, no failover/paging; tags UI truncates at 300. No region browse or consent-based nearby-country suggestion. |
+| Radio Browser country/tag/name search and ordering | Partial | Country pins, complete locally filtered tag list, station-name search and five ordering options exist. Tag filtering is case-insensitive, stays in tags on clear/no matches, and Back from tag stations restores the filter. Exact-tag requests retain Most Voted and other directory ordering (up to 200 stations). Fixture checks cover tags beyond the old 300-row cap, sort requests, navigation, errors, playback and FAVS. Fixed directory hostname, no failover/paging. No region browse or consent-based nearby-country suggestion. |
 | Radio favorites | Implemented | The deployed FAVS screen already keeps saved station/episode metadata and provides direct playback. Preserved and covered by browser regression checks. |
 | Station-provided advertising | Different | On MoE Lofi's Zeno stream, controlled captures show that changing only the User-Agent changes the first ~30 seconds of audio. Chromium does not accept the native player's User-Agent override from page JavaScript. See the [MoE investigation](moe-lofi-ads.md); identical station URLs do not guarantee identical ad delivery. |
 | Custom stations / direct URL / M3U / PLS | Missing | Engine accepts URLs internally but there is no URL/add-station form, playlist parser/import/export or native saved-station format. |
@@ -233,6 +233,7 @@ omabox -b NAME run -- node "$PWD/tests/session-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/spoken-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/visualizer-controls-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/podcast-latest-smoke.mjs"
+omabox -b NAME run -- node "$PWD/tests/radio-tags-smoke.mjs"
 omabox -b NAME down
 ```
 

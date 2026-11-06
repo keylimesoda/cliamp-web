@@ -57,6 +57,9 @@ The exact native release and commit are recorded in [upstream.json](upstream.jso
   live radio return to 1×. Skips stay within the current file and preserve pause.
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
+    Open **Browse genres & tags**, type **lofi** to filter the complete tag list,
+    select the tag, then choose **Most Voted** (or another directory order).
+    Tag filtering stays in the tag list; Back from stations restores your filter.
   - **Podcasts** — Apple top charts, search, RSS enclosures. Saved shows in
     Podcasts and FAVS expose native subscription actions: **Queue latest** (`l`)
     appends one show's newest episode to the playlist and the end of the queue;
