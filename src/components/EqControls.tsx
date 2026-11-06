@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { EQ_BANDS_HZ, EQ_MAX_DB, EQ_MIN_DB, EQ_PRESET_CYCLE } from "../core/eq";
+import { EQ_BANDS_HZ, EQ_MAX_DB, EQ_MIN_DB, EQ_PRESET_CYCLE, presetGains } from "../core/eq";
 import { usePlayerStore } from "../store/player";
 
 function PresetPicker({ onClose }: { onClose: () => void }) {
@@ -14,13 +14,20 @@ function PresetPicker({ onClose }: { onClose: () => void }) {
         <button onClick={close} aria-label="Close EQ presets" autoFocus>Close</button>
       </div>
       <div className="eq-preset-list">
-        {[...EQ_PRESET_CYCLE, "Custom"].map((name) => (
-          <button key={name} disabled={name === "Custom" && !s.customEqGains}
-            aria-pressed={s.eqPreset === name && (name !== "Custom" || s.customEqGains?.every((gain, i) => gain === s.eqGains[i]))}
-            onClick={() => { s.applyPreset(name); close(); }}>
-            {name === "Custom" ? "Saved custom EQ" : name}
-          </button>
-        ))}
+        {[...EQ_PRESET_CYCLE, "Custom"].map((name) => {
+          const gains = name === "Custom" ? s.customEqGains : presetGains(name);
+          const points = gains?.map((gain, i) => `${i * 100 / (gains.length - 1)},${16 - gain * 14 / EQ_MAX_DB}`).join(" ");
+          return (
+            <button key={name} disabled={name === "Custom" && !s.customEqGains}
+              aria-pressed={s.eqPreset === name && (name !== "Custom" || s.customEqGains?.every((gain, i) => gain === s.eqGains[i]))}
+              onClick={() => { s.applyPreset(name); close(); }}>
+              {points && <svg className="eq-preset-curve" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                <polyline points={points} vectorEffect="non-scaling-stroke" />
+              </svg>}
+              <span className="eq-preset-name">{name === "Custom" ? "Saved custom EQ" : name}</span>
+            </button>
+          );
+        })}
       </div>
     </dialog>
   );
