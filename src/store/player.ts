@@ -21,6 +21,8 @@ import {
 } from "../core/audio/mediasession";
 import { clampDb, EQ_BANDS_HZ, EQ_PRESET_CYCLE, presetGains } from "../core/eq";
 import { Playlist } from "../core/playlist";
+import { readPlaybackSession, type PlaybackSession } from "../core/session";
+import { isTrack } from "../core/types";
 import type {
   PlaybackState,
   RepeatMode,
@@ -122,6 +124,7 @@ export function getPlaylist(): Playlist | null {
 // ---- persistence -----------------------------------------------------
 const SETTINGS_KEY = "cliamp-web:settings";
 const RESUME_KEY = "cliamp-web:resume";
+const SESSION_KEY = "cliamp-web:session";
 
 function validEqGains(value: unknown): number[] | null {
   if (!Array.isArray(value) || value.length !== EQ_BANDS_HZ.length
@@ -154,11 +157,13 @@ function readJson<T>(key: string): T | null {
     return null;
   }
 }
-function writeJson(key: string, value: unknown): void {
+function writeJson(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
     // storage full / unavailable — non-fatal
+    return false;
   }
 }
 
@@ -176,21 +181,26 @@ function persistSettings(): void {
     theme: s.theme,
   } satisfies PersistedSettings);
 }
-function persistResume(): void {
+function persistSession(): void {
   const eng = engine;
   const s = usePlayerStore.getState();
-  if (!eng || !s.track || eng.snapshot().track?.path !== s.track.path) return;
+  if (!s.booted || !playlist) return;
   saveProgress();
-  if (s.track.stream) {
-    // live streams have no resumable position
-    try { localStorage.removeItem(RESUME_KEY); } catch { /* unavailable */ }
-    return;
-  }
-  writeJson(RESUME_KEY, {
-    track: s.track,
-    position: eng.getPosition(),
+  const track = s.track ?? playlist.currentTrack ?? null;
+  const active = !transitioning && s.state !== "stopped" && eng?.snapshot().track?.path === track?.path;
+  const position = active ? eng!.getPosition() : s.position;
+  const duration = active ? eng!.getDuration() : s.duration || track?.durationSecs || 0;
+  const saved = writeJson(SESSION_KEY, {
+    version: 1,
+    playlist: playlist.exportState(),
+    track,
+    position: !track || track.live || track.stream || !Number.isFinite(position) ? 0 : Math.max(0, position),
+    duration: Number.isFinite(duration) ? Math.max(0, duration) : 0,
     at: Date.now(),
-  } satisfies PersistedResume);
+  } satisfies PlaybackSession);
+  if (saved) {
+    try { localStorage.removeItem(RESUME_KEY); } catch { /* unavailable */ }
+  }
 }
 
 // ---- store shape -----------------------------------------------------
@@ -281,6 +291,7 @@ function syncPlaylistUI(): void {
     queueCount: pl.queueCount,
     queueEntries: pl.queueIndices().map((i) => ({ track: pl.track(i)!, displayPos: pl.displayAt(i) })),
   });
+  persistSession();
 }
 
 function syncMediaSession(): void {
@@ -308,7 +319,7 @@ function startPositionPolling(): void {
   if (posTimer !== null) window.clearInterval(posTimer);
   posTimer = window.setInterval(() => {
     const eng = engine;
-    if (!eng) return;
+    if (!eng || !eng.snapshot().track) return;
     const s = usePlayerStore.getState();
     if (transitioning) return;
     const pos = eng.getPosition();
@@ -406,11 +417,11 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number,
   });
   syncMediaSession();
   void armNextGapless();
-  persistResume();
+  persistSession();
 }
 
 function onVisibility(): void {
-  if (document.visibilityState === "hidden") persistResume();
+  if (document.visibilityState === "hidden") persistSession();
 }
 
 export const usePlayerStore = create<PlayerState>()((set, get) => ({
@@ -454,6 +465,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
           scrobbled = false;
           syncPlaylistUI();
           setState({ track: now, position: 0, duration: eng.getDuration(), seekable: eng.isSeekable() });
+          persistSession();
           void armNextGapless();
           syncMediaSession();
         } else if (playlist && (playlist.currentTrack?.path !== now?.path
@@ -465,7 +477,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
           wantsPlayback = false;
           setState({ state: "stopped", position: 0 });
           clearMediaSession();
-          try { localStorage.removeItem(RESUME_KEY); } catch { /* unavailable */ }
+          persistSession();
         }
       },
       onError: connectionFailed,
@@ -474,7 +486,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     engine.subscribe((s) => {
       const becamePaused = s.state === "paused" && previousEngineState !== "paused";
       previousEngineState = s.state;
-      if (becamePaused && wantsPlayback && !transitioning) { wantsPlayback = false; recovery.stop(); saveProgress(); }
+      const externalPause = becamePaused && wantsPlayback && !transitioning;
+      if (externalPause) { wantsPlayback = false; recovery.stop(); saveProgress(); }
       set({
         state: s.state,
         track: s.track ?? get().track,
@@ -484,11 +497,14 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         eqGains: s.eqGains,
         dspAvailable: s.dspAvailable,
       });
+      if (externalPause) persistSession();
     });
 
     // restore persisted settings
     const saved = readJson<PersistedSettings>(SETTINGS_KEY);
     if (saved) {
+      const shuffle = saved.shuffle === "on" ? "on" : "off";
+      const repeat = saved.repeat === "all" || saved.repeat === "one" ? saved.repeat : "off";
       const gains = validEqGains(saved.eqGains) ?? new Array(EQ_BANDS_HZ.length).fill(0);
       const custom = validEqGains(saved.customEqGains)
         ?? (saved.eqPreset === "Custom" && saved.customEqGains === undefined ? validEqGains(saved.eqGains) : null);
@@ -499,32 +515,40 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
         eqGains: gains,
         eqPreset: saved.eqPreset ?? "Flat",
         customEqGains: custom,
-        shuffle: saved.shuffle ?? "off",
-        repeat: saved.repeat ?? "off",
+        shuffle,
+        repeat,
         theme: saved.theme ?? "winamp",
       });
       engine.setVolumeDb(saved.volumeDb ?? 0);
       engine.setSpeed(saved.speed ?? 1);
       engine.setMono(saved.mono ?? false);
       engine.setEqGains(gains);
-      playlist.setShuffle(saved.shuffle ?? "off");
-      playlist.setRepeat(saved.repeat ?? "off");
+      playlist.setShuffle(shuffle);
+      playlist.setRepeat(repeat);
     }
-    // restore resume (track + position) without starting audio
-    const resume = readJson<PersistedResume>(RESUME_KEY);
-    if (resume?.track) {
-      set({ track: resume.track, state: "stopped", position: resume.position });
+    // Restore the exact session without resolving sources or starting audio.
+    const session = readPlaybackSession(readJson<unknown>(SESSION_KEY));
+    if (session && playlist.restoreState(session.playlist)) {
+      set({ track: session.track ?? playlist.currentTrack ?? null, state: "stopped", position: session.position, duration: session.duration });
+    } else {
+      // Upgrade the old single-track bookmark. Keep it until a session save succeeds.
+      const resume = readJson<PersistedResume>(RESUME_KEY);
+      if (resume && isTrack(resume.track) && Number.isFinite(resume.position) && resume.position >= 0) {
+        playlist.load([resume.track]);
+        set({ track: resume.track, state: "stopped", position: resume.track.live || resume.track.stream ? 0 : resume.position, duration: resume.track.durationSecs || 0 });
+      }
     }
 
     syncPlaylistUI();
     startPositionPolling();
-    window.setInterval(persistResume, 5000);
+    window.setInterval(persistSession, 5000);
     window.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("beforeunload", persistResume);
-    window.addEventListener("pagehide", persistResume);
+    window.addEventListener("beforeunload", persistSession);
+    window.addEventListener("pagehide", persistSession);
     window.addEventListener("online", () => { if (wantsPlayback && get().recovery) recovery.request("Connection restored"); });
 
     set({ booted: true });
+    persistSession();
   },
 
   async loadPlaylist(tracks, startDisplay = 0, autoplay = true) {
@@ -568,6 +592,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     const start = startAtSec ?? resumePosition(findProgress(useListening.getState().entries, track));
     recoveryPosition = start;
     set({ error: null, track, position: start, state: "buffering" });
+    persistSession();
     let src: ResolvedSource;
     try {
       [src] = await deadline(Promise.all([resolveTrack(track), initialized]));
@@ -595,16 +620,11 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       }
       return;
     }
-    // no active engine track: resume the persisted track if we have one
+    // No active engine track: resolve the restored identity afresh on this tap.
     if (!st.track && playlist?.currentTrack) { await get().next(); return; }
     if (!st.track) { wantsPlayback = false; recovery.stop(); return; }
     if (listeningKey(st.track)) { await get().playTrack(st.track); return; }
-    if (st.track) {
-      const resume = readJson<PersistedResume>(RESUME_KEY);
-      if (resume?.track?.path === st.track.path) {
-        await get().playTrack(st.track, resume.position);
-      } else await get().playTrack(st.track);
-    }
+    await get().playTrack(st.track, st.track.live || st.track.stream ? 0 : st.position);
   },
 
   async retry() {
@@ -619,7 +639,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     transitioning = false;
     ++playGeneration;
     engine?.pause();
-    persistResume();
+    persistSession();
   },
 
   async toggle() {
@@ -635,7 +655,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     lastAdvanceAt = Date.now();
     void armNextGapless();
     set({ position: sec });
-    persistResume();
+    persistSession();
   },
 
   async next() {

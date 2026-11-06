@@ -45,6 +45,12 @@ The exact native release and commit are recorded in [upstream.json](upstream.jso
 - **Driving-friendly listening** — bounded connection recovery, per-episode and
   per-Audiobookshelf-file resume with a five-second rewind, played markers,
   editable play-next queue, and locally saved playlists.
+- **Session restore** — reopening keeps your active playlist, exact shuffle order,
+  play-next queue, current track, music position and repeat mode. Tap Play to resume;
+  podcasts/books retain their five-second rewind, and radio reconnects live.
+  Queue edits save immediately, with position checkpoints every five seconds,
+  on pause and when leaving the page. Existing single-track bookmarks upgrade
+  automatically. Sessions stay in this browser; clearing its storage removes them.
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
   - **Podcasts** — Apple top charts, search, RSS enclosures.

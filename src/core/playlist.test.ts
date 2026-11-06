@@ -7,6 +7,36 @@ function tracks(n: number): Track[] {
 }
 
 describe("Playlist", () => {
+  it("restores a queued current track without losing the album cursor or re-consuming the queue", () => {
+    const p = new Playlist(); p.load(tracks(4));
+    p.queueToggle(3); p.queueToggle(2); p.next();
+    const restored = new Playlist();
+    expect(restored.restoreState(JSON.parse(JSON.stringify(p.exportState())))).toBe(true);
+    expect(restored.currentTrack?.path).toBe("t3");
+    expect(restored.queueIndices()).toEqual([2]);
+    restored.next(); expect(restored.currentTrack?.path).toBe("t2");
+    restored.next(); expect(restored.currentTrack?.path).toBe("t1");
+  });
+  it("retains the exact shuffled order, moved queue and modes across serialization", () => {
+    const p = new Playlist(); p.load(tracks(6), 2); p.setShuffle("on"); p.setRepeat("all");
+    p.queueToggle(p.displayAt(4)); p.queueToggle(p.displayAt(5)); p.queueMove(0, 1);
+    const saved = p.exportState();
+    const restored = new Playlist(); restored.restoreState(JSON.parse(JSON.stringify(saved)));
+    expect(restored.exportState()).toEqual(saved);
+    p.reverse(); p.queueClear(); // exported arrays must remain independent
+    expect(restored.exportState()).toEqual(saved);
+    restored.next(); expect(restored.currentTrack?.path).toBe("t5");
+    restored.next(); expect(restored.currentTrack?.path).toBe("t4");
+    restored.next(); expect(restored.currentTrack?.path).toBe(saved.tracks[saved.order[1]].path);
+  });
+  it.each([
+    { order: [0, 0, 2] }, { queue: [3] }, { cursor: 3 }, { queuedCurrent: 3 },
+    { current: 2 }, { tracks: [{ path: "broken" }] }, { shuffle: "bad" }, { repeat: "bad" },
+  ])("rejects corrupt saved state without changing the model: %j", (patch) => {
+    const p = new Playlist(); p.load(tracks(3)); const before = p.exportState();
+    expect(p.restoreState({ ...before, ...patch })).toBe(false);
+    expect(p.exportState()).toEqual(before);
+  });
   it("reverses while retaining the playing track and queue identities", () => {
     const p = new Playlist();
     p.load(tracks(4), 1);

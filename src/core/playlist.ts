@@ -8,7 +8,7 @@
  *    new tracks mix into upcoming order; off restores original order
  *  - track moves rejected while shuffle is on
  */
-import type { RepeatMode, ShuffleMode, Track } from "./types";
+import { isTrack, type RepeatMode, type ShuffleMode, type Track } from "./types";
 
 export class MoveRejectedError extends Error {}
 
@@ -19,6 +19,26 @@ export interface PlaylistSnapshot {
   order: number[];
   cursor: number;
   queuedCurrent: number;
+}
+
+export interface PlaylistState extends PlaylistSnapshot {
+  shuffle: ShuffleMode;
+  repeat: RepeatMode;
+}
+
+/** Reject corrupt indices rather than silently changing the listening order. */
+export function isPlaylistState(value: unknown): value is PlaylistState {
+  if (!value || typeof value !== "object") return false;
+  const s = value as PlaylistState;
+  if (!Array.isArray(s.tracks) || !s.tracks.every(isTrack)) return false;
+  const n = s.tracks.length;
+  const index = (i: number) => Number.isInteger(i) && i >= 0 && i < n;
+  if (!Array.isArray(s.order) || s.order.length !== n || !s.order.every(index) || new Set(s.order).size !== n) return false;
+  if (!Array.isArray(s.queue) || !s.queue.every(index) || new Set(s.queue).size !== s.queue.length) return false;
+  if (!Number.isInteger(s.cursor) || s.cursor < -1 || s.cursor >= n) return false;
+  if (s.queuedCurrent !== -1 && (!index(s.queuedCurrent) || s.cursor < 0)) return false;
+  if (s.current !== (s.queuedCurrent >= 0 ? s.queuedCurrent : s.cursor < 0 ? -1 : s.order[s.cursor])) return false;
+  return (s.shuffle === "off" || s.shuffle === "on") && ["off", "all", "one"].includes(s.repeat);
 }
 
 function shuffledWithout(current: number, count: number): number[] {
@@ -103,6 +123,29 @@ export class Playlist {
   }
 
   // ---- lifecycle ------------------------------------------------------
+
+  exportState(): PlaylistState {
+    return {
+      tracks: this.tracks.map((t) => ({ ...t })), current: this.currentIndex,
+      queue: [...this.queue], order: [...this.order], cursor: this.pos,
+      queuedCurrent: this.queuedCurrent, shuffle: this.shuffleMode, repeat: this.repeatMode,
+    };
+  }
+
+  /** Restore exact order and both cursors, without reshuffling or consuming a queue entry. */
+  restoreState(value: unknown): boolean {
+    if (!isPlaylistState(value)) return false;
+    this.tracks = value.tracks.map((t) => ({ ...t }));
+    this.order = [...value.order];
+    this.queue = [...value.queue];
+    this.pos = value.cursor;
+    this.queuedCurrent = value.queuedCurrent;
+    this.shuffleMode = value.shuffle;
+    this.repeatMode = value.repeat;
+    this.snapshot = null;
+    this.dirty();
+    return true;
+  }
 
   /** Replace the playlist entirely and start at startDisplay (default 0). */
   load(tracks: Track[], startDisplay = 0): void {
@@ -339,14 +382,7 @@ export class Playlist {
   // ---- undo ------------------------------------------------------------
 
   private takeSnapshot(): void {
-    this.snapshot = {
-      tracks: this.tracks.map((t) => ({ ...t })),
-      current: this.currentIndex,
-      queue: [...this.queue],
-      order: [...this.order],
-      cursor: this.pos,
-      queuedCurrent: this.queuedCurrent,
-    };
+    this.snapshot = this.exportState();
   }
   /** Restore the snapshot taken before the last destructive mutation. */
   undo(): void {

@@ -1,23 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Track } from "../core/types";
 
-const mocks = vi.hoisted(() => ({ resolve: vi.fn() }));
+const mocks = vi.hoisted(() => ({ resolve: vi.fn(), events: vi.fn() }));
 vi.mock("../providers/registry", () => ({ registerProvider: vi.fn(), resolveTrack: mocks.resolve }));
 vi.mock("../core/audio/engine", () => ({
   SPEED_MIN: 0.25, SPEED_MAX: 2,
   AudioEngine: class {
     track: Track | null = null;
     state = "stopped";
+    position = 0;
     listeners = new Set<(s: unknown) => void>();
     constructor(readonly cb: { onTrackEnd: (promoted: boolean) => void }) {}
     snapshot() { return { track: this.track, state: this.state, volumeDb: 0, speed: 1, mono: false, eqGains: Array(10).fill(0), dspAvailable: true }; }
     subscribe(fn: (s: unknown) => void) { this.listeners.add(fn); }
     notify() { this.listeners.forEach((fn) => fn(this.snapshot())); }
     async init() {}
-    async load(track: Track) { this.track = track; this.state = "playing"; this.notify(); }
+    async load(track: Track, _source: unknown, start = 0) { this.track = track; this.position = start; this.state = "playing"; this.notify(); }
     async play() { this.state = "playing"; this.notify(); }
     pause() { this.state = "paused"; this.notify(); }
-    getPosition() { return 0; } getDuration() { return 10; } isSeekable() { return true; }
+    getPosition() { return this.position; } getDuration() { return this.track?.durationSecs || 10; } isSeekable() { return true; }
+    seek(position: number) { this.position = position; }
     clearPreload() {} armGapless() {} startTick() {} setEqGains() {} setSpeed() {} setVolumeDb() {} setMono() {}
     end(promoted: boolean, track?: Track) { if (track) this.track = track; this.cb.onTrackEnd(promoted); }
   },
@@ -27,12 +29,109 @@ let mod: typeof import("./player");
 beforeEach(async () => {
   vi.resetModules(); vi.useFakeTimers();
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {}, removeItem: () => {} });
-  vi.stubGlobal("window", { setInterval, clearInterval, addEventListener: () => {} });
+  mocks.events.mockReset();
+  vi.stubGlobal("window", { setInterval, clearInterval, addEventListener: mocks.events });
   mocks.resolve.mockReset().mockImplementation(async (t: Track) => ({ url: t.path, seekable: true }));
   mod = await import("./player"); await mod.usePlayerStore.getState().boot();
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const end = (promoted: boolean, track?: Track) => (mod.getEngine() as unknown as { end: (p: boolean, t?: Track) => void }).end(promoted, track);
+
+describe("full session restore", () => {
+  let storage: Map<string, string>;
+  const reload = async () => {
+    vi.clearAllTimers(); vi.resetModules(); mocks.resolve.mockClear();
+    mod = await import("./player"); await mod.usePlayerStore.getState().boot();
+  };
+  beforeEach(() => {
+    storage = new Map();
+    vi.stubGlobal("localStorage", { getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => storage.set(k, v), removeItem: (k: string) => storage.delete(k) });
+  });
+  it("reopens at the same music position with the playlist and queue intact, waiting for Play", async () => {
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks); s.queueToggle(2); s.seek(6.25); s.pause();
+    await reload();
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mod.getEngine()?.snapshot().track).toBeNull();
+    expect(mod.usePlayerStore.getState()).toMatchObject({ state: "stopped", position: 6.25, track: tracks[0], queueCount: 1, tracks });
+    await vi.advanceTimersByTimeAsync(5500); // polling must not erase a restored position before Play
+    expect(mod.usePlayerStore.getState().position).toBe(6.25);
+    const load = vi.spyOn(mod.getEngine()!, "load");
+    await mod.usePlayerStore.getState().play();
+    expect(load).toHaveBeenCalledWith(tracks[0], { url: "a", seekable: true }, 6.25);
+    await mod.usePlayerStore.getState().next();
+    expect(mod.usePlayerStore.getState().track?.path).toBe("c");
+    await mod.usePlayerStore.getState().next();
+    expect(mod.usePlayerStore.getState().track?.path).toBe("b");
+  });
+  it("retains the album cursor while reopening in a consumed play-next track", async () => {
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks); s.queueToggle(2); await s.next(); s.pause();
+    await reload();
+    expect(mod.usePlayerStore.getState()).toMatchObject({ track: tracks[2], queueCount: 0 });
+    await mod.usePlayerStore.getState().play();
+    await mod.usePlayerStore.getState().next();
+    expect(mod.usePlayerStore.getState().track?.path).toBe("b");
+  });
+  it("saves shuffle/repeat and queue edits immediately, including edits before playback resumes", async () => {
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks); s.toggleShuffle(); s.cycleRepeat();
+    s.queueToggle(1); s.queueToggle(2); s.queueMove(0, 1);
+    const expected = mod.getPlaylist()!.exportState();
+    await reload();
+    expect(mod.getPlaylist()!.exportState()).toEqual(expected);
+    mod.usePlayerStore.getState().queueRemove(0);
+    const edited = mod.getPlaylist()!.exportState();
+    await reload();
+    expect(mod.getPlaylist()!.exportState()).toEqual(edited);
+  });
+  it("migrates an existing single-track bookmark into a usable session", async () => {
+    storage.set("cliamp-web:resume", JSON.stringify({ track: tracks[1], position: 4, at: Date.now() }));
+    await reload();
+    expect(mod.usePlayerStore.getState()).toMatchObject({ track: tracks[1], tracks: [tracks[1]], position: 4 });
+    expect(storage.has("cliamp-web:session")).toBe(true);
+    expect(storage.has("cliamp-web:resume")).toBe(false);
+  });
+  it("restores live radio and an independent queue, reconnecting from live on Play", async () => {
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks); s.queueToggle(2);
+    const radio = { path: "https://radio.fixture/live", title: "Radio", stream: true, live: true, provider: "radio" };
+    await s.playTrack(radio); s.seek(8); s.pause();
+    await reload();
+    expect(mod.usePlayerStore.getState()).toMatchObject({ track: radio, position: 0, queueCount: 1 });
+    const load = vi.spyOn(mod.getEngine()!, "load"); await mod.usePlayerStore.getState().play();
+    expect(load).toHaveBeenCalledWith(radio, expect.anything(), 0);
+    await mod.usePlayerStore.getState().next();
+    expect(mod.usePlayerStore.getState().track?.path).toBe("c");
+  });
+  it("keeps the spoken-audio rewind behavior when restoring the whole session", async () => {
+    const podcast = { path: "https://podcast.fixture/episode", title: "Episode", provider: "podcast", feed: "https://podcast.fixture/feed", durationSecs: 300 };
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist([podcast]);
+    vi.spyOn(mod.getEngine()!, "getDuration").mockReturnValue(300);
+    s.seek(60); s.pause(); await reload();
+    const load = vi.spyOn(mod.getEngine()!, "load"); await mod.usePlayerStore.getState().play();
+    expect(load).toHaveBeenCalledWith(podcast, expect.anything(), 55);
+  });
+  it("checkpoints on pagehide and preserves playback if storage becomes unavailable", async () => {
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks);
+    vi.spyOn(mod.getEngine()!, "getPosition").mockReturnValue(3);
+    const handler = mocks.events.mock.calls.filter(([name]) => name === "pagehide").at(-1)![1]; handler();
+    const checkpoint = storage.get("cliamp-web:session");
+    expect(JSON.parse(checkpoint!).position).toBe(3);
+    vi.stubGlobal("localStorage", { getItem: (k: string) => storage.get(k) ?? null,
+      setItem: () => { throw new Error("Quota exceeded"); }, removeItem: () => {} });
+    expect(() => s.queueToggle(2)).not.toThrow();
+    expect(mod.usePlayerStore.getState().state).toBe("playing");
+    expect(storage.get("cliamp-web:session")).toBe(checkpoint);
+  });
+  it("checkpoints an external media pause without waiting for the periodic save", async () => {
+    await mod.usePlayerStore.getState().loadPlaylist(tracks);
+    vi.spyOn(mod.getEngine()!, "getPosition").mockReturnValue(4);
+    mod.getEngine()!.pause();
+    expect(JSON.parse(storage.get("cliamp-web:session")!).position).toBe(4);
+  });
+  it.each(["{", JSON.stringify({ version: 99 }), JSON.stringify({ version: 1, playlist: {} })])("ignores damaged or unknown sessions: %s", async (saved) => {
+    storage.set("cliamp-web:session", saved); await reload();
+    expect(mod.usePlayerStore.getState()).toMatchObject({ track: null, tracks: [], state: "stopped" });
+  });
+});
 
 describe("custom EQ", () => {
   it("keeps the saved curve when presets and the working curve change", () => {

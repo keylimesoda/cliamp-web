@@ -93,7 +93,7 @@ Browser evidence: `src/core/audio/engine.ts`, `wsola.test.ts`,
 | Native formats / FFmpeg / HLS / ICY demux | Native | Playback depends on the browser codec/media stack. No FFmpeg, HLS adapter, ICY title stripping or chained OGG parser. A directly playable URL may work, but native format coverage is not established. |
 | Output device, sample rate, buffers, resampler quality | Native | No device selector or native tuning; Web Audio/browser owns output. |
 | Streaming title/now-playing metadata | Missing | Fields exist, but no ICY/provider metadata polling populates them. |
-| Resume | Partial | General track resume and settings use localStorage. Podcasts and Audiobookshelf files have separate per-item progress, five-second rewind and completion rules. Live playback is excluded. Playlist/queue are lost on reload; spoken progress is local to this browser and not synced to Audiobookshelf. |
+| Resume | Partial | A versioned browser-local snapshot restores the entire playlist, exact play order, album cursor, currently playing queued item, remaining queue, active track, finite position and shuffle/repeat. Queue edits save immediately; progress checkpoints every five seconds and on pause/page exit. Reload waits for Play and resolves provider identities afresh. Live stations reconnect at live position; podcasts/books retain independent progress, five-second rewind and completion rules. Old single-track bookmarks migrate; invalid snapshots are ignored. No cross-device or Audiobookshelf server sync. Unit and Tesla-sized browser checks. |
 | Error recovery / skip unplayable / network timeout | Partial | Playback errors and 12-second stalls trigger bounded retries (1/2/4/8/16 seconds); offline periods wait for reconnection, and exhausted retries expose Retry. Pause and track changes cancel retries. Dead-track skipping and native diagnostic reporting remain absent; recovery has unit but not outage-fixture browser coverage. |
 
 ## Sources and provider behavior
@@ -195,19 +195,18 @@ Browser evidence: `src/lua/host.ts`, `src/lua/vm.ts`, `src/store/plugins.ts`,
 
 ## Recommended follow-up order for Tesla
 
-1. **Restore the whole listening session.** Keep the active playlist, play-next
-   queue, order and cursor across browser restarts. Per-episode/file progress
-   and single-track resume already exist; this closes the remaining session gap.
-2. **Expose spoken-audio controls.** Add large rewind/forward buttons and a
+Full-session restore is implemented and covered by regression checks. Next:
+
+1. **Expose spoken-audio controls.** Add large rewind/forward buttons and a
    speed picker for podcasts and books. Relative seek and speed APIs already
    exist; verify non-1× timing and transitions before presenting them as ready.
-3. **Pick visualizers by name.** A popup avoids cycling through 34 modes to
+2. **Pick visualizers by name.** A popup avoids cycling through 34 modes to
    reach a favorite. All 34 modes are already present; rendering cleanup is a
    separate deferred task. Native cliamp also has a visualizer picker.
-4. **Collect latest/unplayed episodes from saved shows.** Build a convenient
+3. **Collect latest/unplayed episodes from saved shows.** Build a convenient
    departure queue from existing subscriptions, progress and played markers.
    This is a browser convenience built on existing functionality.
-5. **Add station and podcast-feed URLs directly.** Allow sources missing from
+4. **Add station and podcast-feed URLs directly.** Allow sources missing from
    search to be saved and reused through the existing favorites UI.
 
 Real-account Plex and browser-only Qobuz validation remain separate provider
@@ -232,6 +231,7 @@ In another terminal, from the checkout:
 omabox up --new --size 1024x768 --net isolated --allow 4173,4174 --no-shell
 # Use the box name printed above in place of NAME:
 omabox -b NAME run -- node "$PWD/tests/browser-smoke.mjs"
+omabox -b NAME run -- node "$PWD/tests/session-smoke.mjs"
 omabox -b NAME down
 ```
 

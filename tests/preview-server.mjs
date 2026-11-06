@@ -17,8 +17,16 @@ const contentTypes = { ".html": "text/html", ".js": "text/javascript", ".css": "
 for (const port of [4173, 4174]) createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
   if (url.pathname.endsWith(".wav") || url.pathname === "/rest/stream") {
-    const bytes = wav(url.pathname.includes("long") || url.pathname === "/rest/stream" ? 30 : 4);
-    res.writeHead(200, { "Content-Type": "audio/wav", "Content-Length": bytes.length }); res.end(bytes); return;
+    const bytes = wav(url.pathname.includes("spoken") ? 180 : url.pathname.includes("long") || url.pathname === "/rest/stream" ? 30 : 4);
+    const range = req.headers.range?.match(/^bytes=(\d+)-(\d*)$/);
+    const headers = { "Content-Type": "audio/wav", "Accept-Ranges": "bytes" };
+    if (range) {
+      const start = Number(range[1]), end = Math.min(range[2] ? Number(range[2]) : bytes.length - 1, bytes.length - 1);
+      if (start > end || start >= bytes.length) { res.writeHead(416, { "Content-Range": `bytes */${bytes.length}` }); res.end(); return; }
+      res.writeHead(206, { ...headers, "Content-Range": `bytes ${start}-${end}/${bytes.length}`, "Content-Length": end - start + 1 });
+      res.end(bytes.subarray(start, end + 1)); return;
+    }
+    res.writeHead(200, { ...headers, "Content-Length": bytes.length }); res.end(bytes); return;
   }
   if (port === 4174) { res.writeHead(404); res.end(); return; }
   if (!url.pathname.startsWith("/cliamp-web/")) { res.writeHead(404); res.end(); return; }
