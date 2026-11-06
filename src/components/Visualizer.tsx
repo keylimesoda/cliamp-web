@@ -5,7 +5,6 @@ import { VISUALIZERS } from "../viz/registry";
 import { drawFrame } from "../viz/draw";
 import { VIZ_COLS, VIZ_ROWS } from "../viz/types";
 import type { VizColors, VizData, Visualizer as Viz } from "../viz/types";
-import VisualizerPicker from "./VisualizerPicker";
 
 // Original cadence (ui/tick.go): ~60 FPS while playing, 5 FPS when idle.
 const TICK_PLAYING_MS = 16;
@@ -54,6 +53,7 @@ function vizData(cols: number, rows: number): VizData {
 
 interface VisualizerProps {
   immersive?: boolean;
+  onOpenFull?: () => void;
 }
 
 /**
@@ -64,10 +64,8 @@ interface VisualizerProps {
  * sizes the canvas backing store to the real CSS dimensions. That prevents the
  * old 900x200 bitmap from being stretched into the 804x638 Tesla layout.
  */
-export default function Visualizer({ immersive = false }: VisualizerProps) {
+export default function Visualizer({ immersive = false, onOpenFull }: VisualizerProps) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const pickerButton = useRef<HTMLButtonElement>(null);
-  const [showPicker, setShowPicker] = useState(false);
   const [grid, setGrid] = useState({ cols: VIZ_COLS, rows: VIZ_ROWS });
   const index = useVizStore((s) => s.index);
   const theme = usePlayerStore((s) => s.theme);
@@ -136,7 +134,7 @@ export default function Visualizer({ immersive = false }: VisualizerProps) {
   }, [grid.cols, grid.rows, index, theme]);
 
   return (
-    <><div className="viz-wrap">
+    <div className="viz-wrap">
       <canvas
         ref={ref}
         className={"visualizer" + (immersive ? " is-immersive" : "")}
@@ -150,15 +148,9 @@ export default function Visualizer({ immersive = false }: VisualizerProps) {
           if (event.key === "Enter" || event.key === " ") { event.preventDefault(); useVizStore.getState().cycle(); }
         }}
       />
-      <button ref={pickerButton} className="viz-name" aria-label={`Choose visualizer: ${name}`} aria-haspopup="dialog"
-        onClick={() => setShowPicker(true)}>
-        <span>{name}</span>
-        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-          <path d="m3 4 3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        </svg>
-      </button>
+      {onOpenFull && <button className="viz-full-toggle" onClick={onOpenFull} aria-label="Open full visualizer">
+        <span className="viz-full-glyph" aria-hidden>V</span>
+      </button>}
     </div>
-    {showPicker && <VisualizerPicker onClose={() => { setShowPicker(false); pickerButton.current?.focus(); }} />}
-    </>
   );
 }
