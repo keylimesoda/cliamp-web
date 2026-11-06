@@ -7,6 +7,9 @@ import { useAsync } from "./useAsync";
 import { jellyfinBrowse, embyBrowseClient } from "../providers/jellyfin";
 import type { EmbyItem } from "../providers/embyapi";
 import { plexBrowse } from "../providers/plex";
+import ProgressLabel from "./ProgressLabel";
+import { useListening } from "../store/listening";
+import { findProgress } from "../core/listening";
 import { absBrowse } from "../providers/audiobookshelf";
 import { lyrionBrowse } from "../providers/lyrion";
 
@@ -17,13 +20,13 @@ type View =
   | { level: 1; top: Node }
   | { level: 2; top: Node; sub: Node };
 
-function Row({ label, hint, marker = "▸", onClick, onFav, faved }: {
-  label: string; hint?: string; marker?: string; onClick?: () => void; onFav?: () => void; faved?: boolean;
+function Row({ label, hint, marker = "▸", onClick, onFav, faved, track }: {
+  label: string; hint?: string; marker?: string; onClick?: () => void; onFav?: () => void; faved?: boolean; track?: Track;
 }) {
   return (
     <div className="row" onClick={onClick} role={onClick ? "button" : undefined} aria-label={label}>
       <span className="marker" aria-hidden>{marker}</span>
-      <span className="title">{label}</span>
+      <span className="title">{label}{track ? <ProgressLabel track={track} /> : null}</span>
       {hint ? <span className="dur">{hint}</span> : null}
       {onFav ? (
         <span className={"marker" + (faved ? " is-fav" : "")} role="button" aria-label="favorite"
@@ -47,7 +50,8 @@ function embyTrack(id: ServerId, t: EmbyItem): Track {
  * level for authors/artists). Tapping a track plays it; ★ favorites it.
  */
 export default function ServerBrowser({ id }: { id: ServerId }) {
-  const playTrack = usePlayerStore((s) => s.playTrack);
+  const loadPlaylist = usePlayerStore((s) => s.loadPlaylist);
+  const progress = useListening((s) => s.entries);
   const favorites = useFavoritesStore();
   const configured = useServers((s) => s.isConfigured(id, true));
   const [view, setView] = useState<View>({ level: 0 });
@@ -88,7 +92,7 @@ export default function ServerBrowser({ id }: { id: ServerId }) {
         if (id === "plex") return plexBrowse.sectionTracks(view.top.id);
       }
       if (view.level === 2) {
-        if (id === "audiobookshelf") return absBrowse.items(view.sub.id).then((items) => items.map(absBrowse.track));
+        if (id === "audiobookshelf") return absBrowse.tracks(view.sub.id);
         if (id === "lyrion") return lyrionBrowse.tracks(Number(view.sub.id));
       }
       return Promise.resolve([]);
@@ -104,7 +108,7 @@ export default function ServerBrowser({ id }: { id: ServerId }) {
       if (id === "lyrion") return lyrionBrowse.search(query);
       if (id === "audiobookshelf") {
         // ABS search is per-library; search the first library.
-        return absBrowse.libraries().then((libs) => (libs[0] ? absBrowse.search(libs[0].id, query) : [])).then((items) => items.map(absBrowse.track));
+        return absBrowse.libraries().then((libs) => (libs[0] ? absBrowse.search(libs[0].id, query) : []));
       }
       return Promise.resolve([]);
     },
@@ -146,6 +150,11 @@ export default function ServerBrowser({ id }: { id: ServerId }) {
         onChange={(e) => setQuery(e.target.value)}
         style={{ width: "100%", minHeight: "var(--tap-min)", padding: "0.5rem 0.8rem", fontFamily: "inherit", fontSize: "var(--fs-md)", color: "var(--text)", background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
       />
+      {isTrack && list.length > 0 && <button onClick={() => {
+        const ts = list as Track[];
+        const latest = ts.map((t, i) => ({ i, p: findProgress(progress, t) })).filter((x) => x.p && !x.p.completed).sort((a, b) => b.p!.updatedAt - a.p!.updatedAt)[0];
+        void loadPlaylist(ts, id === "audiobookshelf" ? latest?.i ?? 0 : 0);
+      }}>{id === "audiobookshelf" ? "Resume book / play all" : "Play all"}</button>}
       <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
         <div className="list" style={{ overflowY: "auto", flex: 1 }}>
           {busy ? <Row label="loading…" /> : null}
@@ -153,7 +162,7 @@ export default function ServerBrowser({ id }: { id: ServerId }) {
           {(list as (Node | Track)[]).map((item, i) =>
             isTrack ? (
               <Row key={(item as Track).path + i} marker="♫" label={(item as Track).title ?? ""} hint={(item as Track).artist}
-                onClick={() => void playTrack(item as Track, 0)}
+                track={item as Track} onClick={() => void loadPlaylist(list as Track[], i)}
                 onFav={() => favorites.toggle(item as Track)} faved={favorites.tracks.some((x) => x.path === (item as Track).path)} />
             ) : (
               <Row key={(item as Node).id + i} label={(item as Node).name} hint={(item as Node).hint}

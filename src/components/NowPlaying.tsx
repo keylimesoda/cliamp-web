@@ -1,3 +1,5 @@
+import QueueScreen from "./QueueScreen";
+import ProgressLabel from "./ProgressLabel";
 import { useState } from "react";
 import { usePlayerStore } from "../store/player";
 import { EQ_BANDS_HZ } from "../core/eq";
@@ -67,6 +69,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
   const [scrubPos, setScrubPos] = useState<number | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
   const [hideImmersiveTitle, setHideImmersiveTitle] = useState(false);
   const pluginStatus = usePluginStore((s) => s.status);
   const playing =
@@ -76,6 +79,8 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
   const shownPos = scrubPos ?? s.position;
   const seekRatio = s.duration > 0 ? shownPos / s.duration : 0;
   const volRatio = (s.volumeDb - VOLUME_MIN_DB) / (VOLUME_MAX_DB - VOLUME_MIN_DB);
+
+  if (showQueue) return <QueueScreen onClose={() => setShowQueue(false)} />;
 
   if (immersive) {
     return (
@@ -198,7 +203,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
         )}
 
         <div className="transport-row">
-          <span aria-hidden />
+          <button className="queue-open" onClick={() => setShowQueue(true)} aria-label="Open queue">Q{s.queueCount ? ` ${s.queueCount}` : ""}</button>
           <div className="transport">
             <button onClick={() => void s.prev()} aria-label="Previous">
               <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
@@ -322,7 +327,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
                 </span>
                 <span className="num">{i + 1}</span>
               </span>
-              <span className="title">{t.title}</span>
+              <span className="title">{t.title}<ProgressLabel track={t} /></span>
               <span className="queue-meta">
                 {t.favorite ? (
                   <span className="marker is-fav" aria-hidden>
@@ -350,8 +355,10 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
       </div>
 
       <div className="footer">
-        {s.error ? (
-          <div className="status-row is-error">ERR: {s.error}</div>
+        {s.recovery ? (
+          <div className="recovery-controls" role="status"><span>{s.recovery.phase === "offline" ? "Waiting for connection…" : `Reconnecting ${s.recovery.attempt}/5…`}</span><button onClick={s.pause}>Pause</button></div>
+        ) : s.error ? (
+          <div className="recovery-controls"><span className="status-row is-error">{s.error}</span><button onClick={() => void s.retry()}>Retry</button></div>
         ) : (
           <div className="status-row">
             {s.track?.station ? `${s.track.station} · ` : ""}

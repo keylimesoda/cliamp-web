@@ -1215,3 +1215,20 @@ select {
   background: var(--row-active);
   font-weight: 700;
 }
+
+/* Listening progress and queue editing use the existing Tesla tap targets. */
+.listening-progress { display: block; font-size: var(--fs-xs); color: var(--text-dim); }
+.queue-tabs, .queue-toolbar, .playlist-name-form, .recovery-controls { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.queue-tabs button { flex: 1; }
+.queue-tabs button[aria-pressed="true"] { color: var(--text-accent); border-color: var(--accent); }
+.queue-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.queue-editor-row { display: flex; gap: 4px; flex-shrink: 0; align-items: center; border-bottom: 1px solid var(--border); }
+.queue-editor-row > button { min-width: var(--tap-min); padding: 0.3rem 0.5rem; }
+.queue-editor-row.is-active { border-left: 3px solid var(--accent); }
+.queue-editor-row .queue-track { flex: 1; min-width: 0; text-align: left; border: 0; background: transparent; }
+.queue-track .title { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.queue-track .dim { display: block; font-size: var(--fs-xs); }
+.playlist-name-form input { min-height: var(--tap-min); min-width: 0; flex: 1; background: var(--bg-sunken); color: var(--text); border: 1px solid var(--border); font: inherit; padding: 0.4rem; }
+.recovery-controls { flex-wrap: nowrap; justify-content: space-between; }
+.recovery-controls > span { overflow: hidden; text-overflow: ellipsis; }
+.queue-open { padding: 0; }

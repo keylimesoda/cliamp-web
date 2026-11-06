@@ -32,6 +32,9 @@ import { resolveTrack } from "../providers/registry";
 import { useHistoryStore } from "./history";
 import { navidromeBrowse } from "../providers/navidrome";
 import { useServers } from "./servers";
+import { useListening } from "./listening";
+import { findProgress, listeningKey, resumePosition } from "../core/listening";
+import { PlaybackRecovery, type RecoveryStatus } from "../core/audio/recovery";
 
 // ---- module singletons (not reactive) --------------------------------
 let engine: AudioEngine | null = null;
@@ -40,6 +43,74 @@ let posTimer: number | null = null;
 let scrobbled = false;
 let playGeneration = 0;
 let preloadGeneration = 0;
+let wantsPlayback = false;
+let transitioning = false;
+let lastPosition = 0;
+let lastAdvanceAt = Date.now();
+let stableSince = Date.now();
+let recoveryPosition = 0;
+
+function online(): boolean { return typeof navigator === "undefined" || navigator.onLine !== false; }
+const recovery = new PlaybackRecovery({
+  online,
+  status: (status) => setState({ recovery: status, ...(status ? { state: "buffering" } : {}) }),
+  exhausted: (reason) => {
+    wantsPlayback = false;
+    engine?.pause();
+    setState({ error: `${reason}. Tap Retry to reconnect.`, recovery: null, state: "paused" });
+  },
+  reconnect: async () => {
+    const track = usePlayerStore.getState().track;
+    if (!track || !wantsPlayback) return;
+    const generation = ++playGeneration;
+    transitioning = true;
+    engine!.pause();
+    engine!.clearPreload();
+    const position = track.live ? 0 : recoveryPosition;
+    try {
+      await deadline((async () => {
+        const src = await resolveTrack(track);
+        if (generation !== playGeneration || !wantsPlayback) return;
+        await engine!.load(track, src, position);
+      })());
+      if (generation !== playGeneration || !wantsPlayback) return;
+      engine!.startTick();
+      lastPosition = position; lastAdvanceAt = stableSince = Date.now();
+      setState({ state: engine!.snapshot().state, error: null, position, seekable: engine!.isSeekable() });
+      syncMediaSession();
+      void armNextGapless();
+    } catch (e) {
+      if (generation !== playGeneration || !wantsPlayback) return;
+      engine!.pause();
+      throw e;
+    } finally { if (generation === playGeneration) transitioning = false; }
+  },
+});
+
+async function deadline<T>(operation: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([operation, new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("Connection timed out")), 15000);
+    })]);
+  } finally { if (timer !== undefined) clearTimeout(timer); }
+}
+
+function connectionFailed(message: string): void {
+  if (!wantsPlayback) return;
+  const s = usePlayerStore.getState();
+  const activePosition = engine?.snapshot().track?.path === s.track?.path ? engine?.getPosition() : s.position;
+  recoveryPosition = s.track?.live ? 0 : activePosition || recoveryPosition;
+  stableSince = Date.now();
+  recovery.request(message);
+}
+
+function saveProgress(ended = false): void {
+  const s = usePlayerStore.getState();
+  if (!s.track || !engine || engine.snapshot().track?.path !== s.track.path) return;
+  if (!ended && s.state === "stopped") return;
+  useListening.getState().record(s.track, engine.getPosition(), engine.getDuration() || s.track.durationSecs || 0, ended);
+}
 
 export function getEngine(): AudioEngine | null {
   return engine;
@@ -100,10 +171,11 @@ function persistSettings(): void {
 function persistResume(): void {
   const eng = engine;
   const s = usePlayerStore.getState();
-  if (!eng || !s.track) return;
+  if (!eng || !s.track || eng.snapshot().track?.path !== s.track.path) return;
+  saveProgress();
   if (s.track.stream) {
     // live streams have no resumable position
-    localStorage.removeItem(RESUME_KEY);
+    try { localStorage.removeItem(RESUME_KEY); } catch { /* unavailable */ }
     return;
   }
   writeJson(RESUME_KEY, {
@@ -135,6 +207,8 @@ export interface PlayerState {
   shuffle: ShuffleMode;
   repeat: RepeatMode;
   queueCount: number;
+  queueEntries: { track: Track; displayPos: number }[];
+  recovery: RecoveryStatus | null;
   // ui
   error: string | null;
   ratingBusy: boolean;
@@ -144,6 +218,14 @@ export interface PlayerState {
   loadPlaylist: (tracks: Track[], startDisplay?: number, autoplay?: boolean) => Promise<void>;
   playDisplay: (pos: number) => Promise<void>;
   playTrack: (track: Track, startAtSec?: number) => Promise<void>;
+  retry: () => Promise<void>;
+  enqueueTrack: (track: Track) => Promise<void>;
+  queueRemove: (index: number) => void;
+  queueMove: (from: number, to: number) => void;
+  queueClear: () => void;
+  removeTrack: (displayPos: number) => void;
+  moveTrack: (from: number, to: number) => void;
+  undoPlaylist: () => void;
   play: () => Promise<void>;
   pause: () => void;
   toggle: () => Promise<void>;
@@ -186,6 +268,7 @@ function syncPlaylistUI(): void {
     shuffle: pl.shuffle,
     repeat: pl.repeat,
     queueCount: pl.queueCount,
+    queueEntries: pl.queueIndices().map((i) => ({ track: pl.track(i)!, displayPos: pl.displayAt(i) })),
   });
 }
 
@@ -216,12 +299,23 @@ function startPositionPolling(): void {
     const eng = engine;
     if (!eng) return;
     const s = usePlayerStore.getState();
+    if (transitioning) return;
     const pos = eng.getPosition();
     const dur = eng.getDuration();
     if (pos !== s.position || dur !== s.duration) {
       setState({ position: pos, duration: dur, seekable: eng.isSeekable() });
     }
     // Scrobble once a finite track passes 50% (cliamp parity).
+    if (wantsPlayback && !transitioning && !s.recovery) {
+      const now = Date.now();
+      if (pos > lastPosition + 0.05 || pos < lastPosition - 1) {
+        lastPosition = pos; recoveryPosition = pos; lastAdvanceAt = now;
+        if (now - stableSince >= 10000) recovery.stable();
+      } else if (now - lastAdvanceAt >= 12000) {
+        connectionFailed("Playback stalled");
+        lastAdvanceAt = now;
+      }
+    }
     const cur = s.track;
     if (
       cur &&
@@ -241,11 +335,7 @@ function startPositionPolling(): void {
 function nextTrackIndex(): number {
   const pl = playlist;
   if (!pl || pl.currentIndex === -1) return -1;
-  if (pl.queueCount > 0) return pl.queueIndices()[0];
-  if (pl.repeat === "one") return pl.currentIndex;
-  const nextDisp = pl.displayAt(pl.currentIndex) + 1;
-  if (nextDisp < pl.count) return pl.indexAtDisplay(nextDisp);
-  return pl.repeat === "all" ? pl.indexAtDisplay(0) : -1;
+  return pl.peekNextIndex();
 }
 
 /** Preload the next finite track for gapless playback (no-op for streams). */
@@ -259,7 +349,7 @@ async function armNextGapless(): Promise<void> {
   const idx = nextTrackIndex();
   if (idx === -1) return;
   const next = pl.track(idx);
-  if (!next || next.live) return;
+  if (!next || next.live || listeningKey(next)) return;
   try {
     const src = await resolveTrack(next);
     if (generation === preloadGeneration && src.seekable && !src.direct) eng.armGapless(next, src.url, src.headers);
@@ -271,14 +361,23 @@ async function armNextGapless(): Promise<void> {
 async function playSource(track: Track, src: ResolvedSource, startAtSec: number, generation: number): Promise<void> {
   const eng = engine!;
   try {
-    await eng.load(track, src, startAtSec);
+    await deadline(eng.load(track, src, startAtSec));
     eng.startTick();
   } catch (e) {
     if (generation !== playGeneration) return;
-    setState({ state: eng.snapshot().state, error: e instanceof Error ? e.message : "playback failed" });
+    transitioning = false;
+    eng.pause();
+    if (e instanceof DOMException && e.name === "NotAllowedError") {
+      wantsPlayback = false; recovery.stop(); setState({ error: "Tap Play to start audio", state: "paused" });
+    } else connectionFailed(e instanceof Error ? e.message : "Playback failed");
     return;
   }
   if (generation !== playGeneration) return;
+  transitioning = false;
+  lastPosition = recoveryPosition = startAtSec;
+  lastAdvanceAt = stableSince = Date.now();
+  const previous = findProgress(useListening.getState().entries, track);
+  if (previous?.completed && startAtSec === 0) useListening.getState().restart(track);
   scrobbled = false;
   const pl = playlist!;
   const curIdx = pl.currentIndex;
@@ -293,7 +392,6 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number,
     position: startAtSec,
     duration: eng.getDuration(),
     seekable: eng.isSeekable(),
-    error: null,
   });
   syncMediaSession();
   void armNextGapless();
@@ -322,6 +420,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   shuffle: "off",
   repeat: "off",
   queueCount: 0,
+  queueEntries: [],
+  recovery: null,
   error: null,
   ratingBusy: false,
 
@@ -331,6 +431,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     engine = new AudioEngine({
       onTrackEnd: (promoted) => {
         // The gapless buffer (if any) is now the playing track.
+        saveProgress(true);
+        recovery.stop();
         const eng = engine!;
         const now = eng.snapshot().track;
         if (promoted && now && playlist) {
@@ -341,19 +443,22 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
           setState({ track: now, position: 0, duration: eng.getDuration(), seekable: eng.isSeekable() });
           void armNextGapless();
           syncMediaSession();
-        } else if (playlist?.currentTrack?.path === now?.path && playlist?.next()) {
+        } else if (playlist && (playlist.currentTrack?.path !== now?.path
+          ? Boolean(playlist.currentTrack) : playlist.next())) {
           syncPlaylistUI();
           void get().playTrack(playlist!.currentTrack!, 0);
         } else {
           // natural end with nothing preloaded
+          wantsPlayback = false;
           setState({ state: "stopped", position: 0 });
           clearMediaSession();
-          localStorage.removeItem(RESUME_KEY);
+          try { localStorage.removeItem(RESUME_KEY); } catch { /* unavailable */ }
         }
       },
-      onError: (message) => setState({ error: message }),
+      onError: connectionFailed,
     });
     engine.subscribe((s) => {
+      if (s.state === "paused" && wantsPlayback && !transitioning) { wantsPlayback = false; recovery.stop(); saveProgress(); }
       set({
         state: s.state,
         track: s.track ?? get().track,
@@ -395,6 +500,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     window.setInterval(persistResume, 5000);
     window.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("beforeunload", persistResume);
+    window.addEventListener("pagehide", persistResume);
+    window.addEventListener("online", () => { if (wantsPlayback && get().recovery) recovery.request("Connection restored"); });
 
     set({ booted: true });
   },
@@ -408,7 +515,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     syncPlaylistUI();
     if (autoplay) {
       const t = playlist!.currentTrack;
-      if (t) await get().playTrack(t, 0);
+      if (t) await get().playTrack(t);
     }
   },
 
@@ -417,13 +524,18 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     const pl = playlist!;
     const t = pl.track(pl.indexAtDisplay(pos));
     if (t) {
+      saveProgress();
       pl.playDisplay(pos);
       syncPlaylistUI();
-      await get().playTrack(t, 0);
+      await get().playTrack(t);
     }
   },
 
-  async playTrack(track, startAtSec = 0) {
+  async playTrack(track, startAtSec) {
+    saveProgress();
+    wantsPlayback = true;
+    recovery.start();
+    transitioning = true;
     const generation = ++playGeneration;
     const st = get();
     if (!st.booted) await st.boot();
@@ -432,45 +544,65 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     engine!.clearPreload();
     // Create/resume the context while the initiating touch still has activation.
     const initialized = track.provider === "podcast" ? Promise.resolve() : engine!.init();
-    set({ error: null });
+    const start = startAtSec ?? resumePosition(findProgress(useListening.getState().entries, track));
+    recoveryPosition = start;
+    set({ error: null, track, position: start, state: "buffering" });
     let src: ResolvedSource;
     try {
-      [src] = await Promise.all([resolveTrack(track), initialized]);
+      [src] = await deadline(Promise.all([resolveTrack(track), initialized]));
     } catch (e) {
       if (generation !== playGeneration) return;
-      set({ error: e instanceof Error ? e.message : "could not resolve source" });
+      transitioning = false;
+      connectionFailed(e instanceof Error ? e.message : "Could not resolve source");
       return;
     }
     if (generation !== playGeneration) return;
-    await playSource(track, src, startAtSec, generation);
+    await playSource(track, src, start, generation);
   },
 
   async play() {
     const st = get();
     if (!st.booted) await st.boot();
     const eng = engine!;
+    wantsPlayback = true;
+    recovery.start();
+    lastAdvanceAt = stableSince = Date.now();
     if (eng.snapshot().track) {
-      try { await eng.play(); } catch (e) { set({ error: e instanceof Error ? e.message : "playback failed" }); }
+      try { await deadline(eng.play()); } catch (e) {
+        if (e instanceof DOMException && e.name === "NotAllowedError") { wantsPlayback = false; recovery.stop(); set({ error: "Tap Play to start audio" }); }
+        else connectionFailed(e instanceof Error ? e.message : "Playback failed");
+      }
       return;
     }
     // no active engine track: resume the persisted track if we have one
+    if (!st.track && playlist?.currentTrack) { await get().next(); return; }
+    if (!st.track) { wantsPlayback = false; recovery.stop(); return; }
+    if (listeningKey(st.track)) { await get().playTrack(st.track); return; }
     if (st.track) {
       const resume = readJson<PersistedResume>(RESUME_KEY);
       if (resume?.track?.path === st.track.path) {
         await get().playTrack(st.track, resume.position);
-      } else await get().playTrack(st.track, 0);
+      } else await get().playTrack(st.track);
     }
   },
 
+  async retry() {
+    const track = get().track;
+    if (track) await get().playTrack(track, track.live ? 0 : recoveryPosition);
+  },
+
   pause() {
+    saveProgress();
+    wantsPlayback = false;
+    recovery.stop();
+    transitioning = false;
     ++playGeneration;
     engine?.pause();
     persistResume();
   },
 
   async toggle() {
-    const s = get().state;
-    if (s === "playing" || s === "buffering" || s === "seeking") get().pause();
+    if (wantsPlayback) get().pause();
     else await get().play();
   },
 
@@ -478,6 +610,8 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     const eng = engine;
     if (!eng || !eng.isSeekable()) return;
     eng.seek(sec);
+    lastPosition = recoveryPosition = sec;
+    lastAdvanceAt = Date.now();
     void armNextGapless();
     set({ position: sec });
     persistResume();
@@ -486,10 +620,13 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   async next() {
     if (!get().booted) await get().boot();
     const pl = playlist!;
-    if (pl.next()) {
+    saveProgress();
+    if ((pl.currentTrack?.path !== get().track?.path && !pl.queueCount) ? Boolean(pl.currentTrack) : pl.next()) {
       const t = pl.currentTrack!;
       syncPlaylistUI();
-      await get().playTrack(t, 0);
+      await get().playTrack(t);
+    } else {
+      get().pause(); set({ state: "stopped" }); clearMediaSession();
     }
   },
 
@@ -499,7 +636,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     if (pl.prev()) {
       const t = pl.currentTrack!;
       syncPlaylistUI();
-      await get().playTrack(t, 0);
+      await get().playTrack(t);
     }
   },
 
@@ -571,6 +708,22 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     syncPlaylistUI();
     void armNextGapless();
   },
+  async enqueueTrack(track) {
+    if (!get().booted) await get().boot();
+    let index = indexOfTrack(playlist!, track);
+    if (index < 0) index = playlist!.add([track]);
+    playlist!.enqueueNext(playlist!.displayAt(index));
+    syncPlaylistUI(); void armNextGapless();
+  },
+  queueRemove(index) { playlist?.queueRemove(index); syncPlaylistUI(); void armNextGapless(); },
+  queueMove(from, to) { playlist?.queueMove(from, to); syncPlaylistUI(); void armNextGapless(); },
+  queueClear() { playlist?.queueClear(); syncPlaylistUI(); void armNextGapless(); },
+  removeTrack(pos) { playlist?.removeDisplay(pos); syncPlaylistUI(); void armNextGapless(); },
+  moveTrack(from, to) {
+    try { playlist?.moveDisplay(from, to); syncPlaylistUI(); void armNextGapless(); }
+    catch (e) { set({ error: e instanceof Error ? e.message : "Could not move track" }); }
+  },
+  undoPlaylist() { playlist?.undo(); syncPlaylistUI(); void armNextGapless(); },
   setTheme(name) {
     set({ theme: name });
     persistSettings();

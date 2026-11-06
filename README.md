@@ -30,16 +30,20 @@ The exact native release and commit are recorded in [upstream.json](upstream.jso
 
 - **Now Playing** — touch transport (prev / play-pause / next), seek bar,
   built-in 10-band EQ presets, mono, shuffle/repeat, volume,
-  and **34 real-time visualizer modes** — tap the visualizer to cycle modes.
+  queue and playlist manager, and **34 real-time visualizer modes** — tap the
+  visualizer to cycle modes.
 - **v2.4 updates** — YinYang and Ethereal visualizers, previous EQ preset,
   playlist reversal, current-track Navidrome ratings, radio channel song lists
   and listener counts, and corrected lyrics/Plex metadata.
+- **Driving-friendly listening** — bounded connection recovery, per-episode and
+  per-Audiobookshelf-file resume with a five-second rewind, played markers,
+  editable play-next queue, and locally saved playlists.
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
   - **Podcasts** — Apple top charts, search, RSS enclosures.
-  - **Self-hosted** — Navidrome (Subsonic), with basic Plex code. Jellyfin,
-    Emby, Audiobookshelf and Lyrion have UI/client scaffolding but known
-    contract/setup gaps; see the audit before relying on them.
+  - **Self-hosted** — Navidrome (Subsonic), Plex and Audiobookshelf. Jellyfin,
+    Emby and Lyrion still have contract/setup gaps; see the audit before relying
+    on them.
 - **History & favorites** — recent plays (deduped) and a favorites list,
   persisted locally.
 - **Lyrics** — LRCLIB lookup and LRC parsing, synced to playback.

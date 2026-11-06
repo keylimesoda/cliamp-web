@@ -45,7 +45,7 @@ describe("player transition guards", () => {
     const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks); s.queueToggle(2);
     end(true, tracks[2]);
     expect(mod.getPlaylist()?.queueCount).toBe(0); expect(mod.getPlaylist()?.currentTrack?.path).toBe("c");
-    end(false); expect(mod.usePlayerStore.getState().state).toBe("stopped");
+    end(false); await vi.waitFor(() => expect(mod.usePlayerStore.getState().track?.path).toBe("b"));
   });
   it("repeats the current track at natural end in repeat-one mode", async () => {
     await mod.usePlayerStore.getState().loadPlaylist(tracks);

@@ -71,6 +71,7 @@ export default function ServersScreen() {
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               style={inputStyle}
             />
+            {editing !== "navidrome" && editing !== "lyrion" && <input type="password" placeholder="API token (optional with username/password)" aria-label="API token" value={form.token || ""} onChange={(e) => setForm({ ...form, token: e.target.value })} style={inputStyle} />}
             <div style={{ display: "flex", gap: "var(--gap)" }}>
               <button className="btn-accent" style={{ flex: 1 }} onClick={() => save(editing)}>
                 Save

@@ -9,6 +9,10 @@ const context = await browser.newContext({ viewport: { width: 804, height: 638 }
 const page = await context.newPage();
 await page.addInitScript(() => {
   window.__workletUrls = [];
+  window.__mediaElements = [];
+  const OriginalAudio = window.Audio;
+  window.Audio = function (...args) { const media = new OriginalAudio(...args); window.__mediaElements.push(media); return media; };
+  window.Audio.prototype = OriginalAudio.prototype;
   const Original = window.AudioContext;
   window.AudioContext = class extends Original {
     constructor(...args) {
@@ -47,6 +51,25 @@ try {
   await expect(page.locator(".time-status .state")).toHaveText("Playing");
   await expect(page.locator(".track-line")).toContainText("Fixture B", { timeout: 10000 });
   await expect(page.locator(".track-line")).toContainText("Fixture C", { timeout: 10000 });
+  await page.getByRole("button", { name: "Open queue", exact: true }).tap();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await page.getByRole("button", { name: "Play next: Fixture A", exact: true }).evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(56);
+  await page.getByRole("button", { name: "Play next: Fixture A", exact: true }).tap();
+  await page.getByRole("button", { name: /Play next \(1\)/ }).tap();
+  await expect(page.getByRole("button", { name: "Play: Fixture A", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Play queue", exact: true }).tap();
+  await expect(page.getByRole("button", { name: /Play next \(0\)/ })).toBeVisible();
+  await page.getByRole("button", { name: "Back to playback", exact: true }).tap();
+  await expect(page.locator(".track-line")).toContainText("Fixture A");
+  await page.getByRole("button", { name: "Open queue", exact: true }).tap();
+  await page.getByRole("button", { name: "Save playlist", exact: true }).tap();
+  await page.getByRole("textbox", { name: "Playlist name" }).fill("Tesla commute");
+  await page.getByRole("button", { name: "Save", exact: true }).tap();
+  await page.getByRole("button", { name: "Saved playlists", exact: true }).tap();
+  await expect(page.getByRole("button", { name: "Play playlist: Tesla commute", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Playlist (3)", exact: true }).tap();
+  await page.getByRole("button", { name: "Play: Fixture C", exact: true }).tap();
+  await page.getByRole("button", { name: "Back to playback", exact: true }).tap();
   await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
   await expect(page.locator(".time-status .state")).toHaveText("Paused");
   await page.getByRole("button", { name: "MORE", exact: true }).tap();
@@ -170,6 +193,15 @@ try {
   await page.getByRole("button", { name: "Now Playing", exact: true }).tap();
   await expect(page.locator(".track-line")).toContainText("Fixture episode");
   await expect(page.locator(".time-status .state")).toHaveText("Playing");
+  await page.waitForFunction(() => window.__mediaElements.some((m) => !m.paused && m.duration >= 25 && m.currentTime >= 16), null, { timeout: 25000 });
+  await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
+  const savedProgress = await page.evaluate(() => JSON.parse(localStorage.getItem("cliamp-web:listening-progress")));
+  expect(savedProgress.entries).toHaveLength(1);
+  expect(savedProgress.entries[0].position).toBeGreaterThanOrEqual(14);
+  await page.reload();
+  await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
+  const resumeAt = Math.max(0, savedProgress.entries[0].position - 5);
+  await page.waitForFunction((position) => window.__mediaElements.some((m) => !m.paused && m.duration >= 25 && Math.abs(m.currentTime - position) < 2), resumeAt, { timeout: 10000 });
   expect(errors).toEqual([]);
-  console.log(JSON.stringify({ passed: true, viewport: "804×638 touch, DPR 1.96", checks: ["subpath worklet", "three-track automatic progression", "pause", "playlist reversal", "previous EQ preset", "visualizer persistence", "legacy None migration", "non-CORS media progression", "rating success/failure and metadata retention", "22-theme picker via playback and Settings", "live theme application without stopping playback", "theme persistence", "light and dark themes", "plugin toggles remain accessible", "Tesla FAVS station playback", "saved podcast opens and plays", "immersive enter/exit", "no horizontal overflow", "no uncaught JS errors"], screenshots }));
+  console.log(JSON.stringify({ passed: true, viewport: "804×638 touch, DPR 1.96", checks: ["subpath worklet", "three-track automatic progression", "queue play-next ordering and consumption", "saved playlist creation", "pause", "playlist reversal", "previous EQ preset", "visualizer persistence", "legacy None migration", "non-CORS media progression", "rating success/failure and metadata retention", "22-theme picker via playback and Settings", "live theme application without stopping playback", "theme persistence", "light and dark themes", "plugin toggles remain accessible", "Tesla FAVS station playback", "saved podcast opens and plays", "podcast progress persistence and five-second rewind", "immersive enter/exit", "no horizontal overflow", "no uncaught JS errors"], screenshots }));
 } finally { await context.close(); await browser.close(); }

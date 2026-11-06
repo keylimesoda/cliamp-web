@@ -1,6 +1,6 @@
 # Feature parity audit: cliamp v2.4.0
 
-Audited November 5, 2026, after the v0.2.0 web update. The browser app is a
+Audited November 5, 2026, after the v0.2.0 web update and Tesla feature pass. The browser app is a
 separate TypeScript implementation. It does **not** have complete feature or
 behavioral parity with cliamp. The original README overstated its coverage.
 
@@ -24,7 +24,7 @@ and immersive mode must not be treated as new missing work.
 - Compared the tagged native source, documentation and provider test fixtures
   against actual browser code, UI wiring and tests. The historical JSON reports
   in `docs/recon/` describe the original investigation, not verified coverage.
-- Runtime evidence: 89 automated unit/regression tests, TypeScript checking,
+- Runtime evidence: 103 automated unit/regression tests, TypeScript checking,
   production build, and Chromium fixture tests at 804×638 CSS pixels, touch
   enabled, DPR 1.96. Browser tests ran inside an isolated omabox box
   (Omarchy 4.5.0-3, virtual desktop 1024×768, no shell); fictional stations,
@@ -51,7 +51,10 @@ An implemented client does not imply its real server has been tested.
 | YinYang visualizer | Added a Braille/canvas adaptation of the koi, lily pad, lotus, onset reactions, circular and wide-strip paths. Uses simplified path pacing and rendering; not pixel-identical to native sextants. Grid/resize/pause tests and browser capture. |
 | Ethereal visualizer | Added drifting value-noise clouds and reactive stars using the shared palette. Browser capture and grid/resize/pause tests; star layout is deterministic but not identical to Go's RNG. |
 | Previous EQ preset | Added a touch button; forward/backward wrap across built-in presets. Browser test. Native's saved Custom slot remains a gap. |
-| Playlist reversal | Added model operation and touch button. Preserves current track and queued identities; shuffle retains its active play order. Unit and browser tests. No saved-playlist persistence. |
+| Playlist reversal | Added model operation and touch button. Preserves current track and queued identities; shuffle retains its active play order. Unit and browser tests. |
+| Playback recovery | Added bounded reconnect attempts at 1/2/4/8/16 seconds, offline wait, stall detection, cancellation on pause/new selection, and manual Retry after exhaustion. Recovery unit tests; provider outage/stall behavior has not yet been browser-fixture tested. |
+| Spoken-audio progress | Added per-podcast-episode and per-Audiobookshelf-file progress, five-second rewind, first-15-second restart, played/resume labels and completion/replay behavior. Unit and podcast browser checks. Browser storage only; no cross-device sync or Audiobookshelf server progress write. |
+| Queue and saved playlists | Added a Tesla-sized queue view with play-next, queue reordering/removal/clear, playlist reorder/removal/undo, create/rename/delete saved playlists, and local persistence. Model and touch browser checks cover play-next and create. Search, sort and multi-select remain absent. |
 | Navidrome ratings | Reads `userRating`; current-track selector sets 0–5 via `setRating`, with server acceptance, error handling and config-change guards. Unit wire fixtures plus browser accepted/rejected requests. Native can rate a selected nonplaying track too; the browser cannot yet. |
 | Plex album year | Uses `parentYear` when a track has no year; also corrected artist/album keys and library sections. Native-shaped fixture tests. |
 | Repeated LRC timestamps | Expands every cue and sorts it, with corrected milliseconds, BOM and long-minute handling. Regression tests. |
@@ -81,7 +84,7 @@ Browser evidence: `src/core/audio/engine.ts`, `wsola.test.ts`,
 | --- | --- | --- |
 | Play/pause, previous/next, finite seeking, volume | Implemented | Touch controls and MediaSession adapter; native media playback/automatic progression tested with fixture WAVs. |
 | Stop/reset | Missing | No Stop control; Lua `stop` currently maps to pause. |
-| Automatic next / repeat / shuffle | Partial | Playlist logic tested; natural end and three-track progression verified. Most browsers open server tracks as detached single tracks, so an album click does not establish a navigable album playlist. |
+| Automatic next / repeat / shuffle | Implemented | Album/search selections from Navidrome, Audiobookshelf and podcasts now load contextual track lists. Queue precedence, album-cursor continuation, repeat-one, natural end and three-track progression are covered by model/browser tests. Other provider selections may still be detached. |
 | Race-safe manual selection and preload changes | Implemented | Resolver/load/preload generations and aborts; unit tests cover late replies and pause during resolution. |
 | Ten-band parametric EQ and built-in curves | Partial | Frequencies, Q, gains and presets ported. UI band boxes only display gains; there are no individual gain controls or saved Custom curve. Non-CORS playback bypasses DSP entirely. |
 | Playback speed 0.25–2× / pitch preservation | Partial | WSOLA algorithm and store setter exist. No speed control is exposed in the touch UI. Source time/end events still run on the media element/buffer's clock; non-1× timeline, overflow/drain and track-boundary correctness need end-to-end work. Unit DSP tests do not establish native timing parity. |
@@ -90,8 +93,8 @@ Browser evidence: `src/core/audio/engine.ts`, `wsola.test.ts`,
 | Native formats / FFmpeg / HLS / ICY demux | Native | Playback depends on the browser codec/media stack. No FFmpeg, HLS adapter, ICY title stripping or chained OGG parser. A directly playable URL may work, but native format coverage is not established. |
 | Output device, sample rate, buffers, resampler quality | Native | No device selector or native tuning; Web Audio/browser owns output. |
 | Streaming title/now-playing metadata | Missing | Fields exist, but no ICY/provider metadata polling populates them. |
-| Resume | Partial | One finite track/position and settings in localStorage, with a periodic snapshot. Playlist/queue are lost on reload; no per-episode/book progress or cross-device state. |
-| Error recovery / skip unplayable / network timeout | Partial | Errors surfaced; non-CORS retry works. No comprehensive retry/backoff, stalled-stream timeout, dead-track skipping or native diagnostic pipeline. |
+| Resume | Partial | General track resume and settings use localStorage. Podcasts and Audiobookshelf files have separate per-item progress, five-second rewind and completion rules. Live playback is excluded. Playlist/queue are lost on reload; spoken progress is local to this browser and not synced to Audiobookshelf. |
+| Error recovery / skip unplayable / network timeout | Partial | Playback errors and 12-second stalls trigger bounded retries (1/2/4/8/16 seconds); offline periods wait for reconnection, and exhausted retries expose Retry. Pause and track changes cancel retries. Dead-track skipping and native diagnostic reporting remain absent; recovery has unit but not outage-fixture browser coverage. |
 
 ## Sources and provider behavior
 
@@ -109,15 +112,15 @@ Browser evidence: `src/providers/`, `src/components/*Browser.tsx`,
 | Radio favorites | Implemented | The deployed FAVS screen already keeps saved station/episode metadata and provides direct playback. Preserved and covered by browser regression checks. |
 | Custom stations / direct URL / M3U / PLS | Missing | Engine accepts URLs internally but there is no URL/add-station form, playlist parser/import/export or native saved-station format. |
 | Podcast chart/search/categories/RSS/subscriptions | Partial | Apple chart/search, 19 categories and RSS enclosures; saved subscriptions. Chart country fixed to US. Search is per keystroke, not submit-only. Direct feed-URL input and Atom episode extraction are absent. CORS can block publisher feeds. |
-| Podcast progress / played state / latest from subscriptions | Missing | No GUID-based progress map, five-second rewind, played markers, enqueue-latest or batch subscription actions. RSS duration parsing includes the deployed branch’s `HH:MM:SS` fix. |
+| Podcast progress / played state / latest from subscriptions | Partial | GUID/enclosure-based local progress, ambiguity-safe metadata migration, five-second rewind, first-15-second restart, completion/played markers and resume labels are implemented. No enqueue-latest or batch subscription actions; CORS can block publisher feeds. RSS duration parsing includes the deployed branch’s `HH:MM:SS` fix. |
 | Local files/folders / tags / embedded lyrics | Missing | “Local” means history/favorites only. No File API picker, directory import, file tags or embedded lyrics. User-mediated file import is feasible in a static app. |
 | Navidrome artists/albums/search | Partial | Real Subsonic envelope/nesting corrected; fixture-tested. No real authenticated server test. No UI pagination/sort chooser, saved-playlist browse, server favorite sync, playback reporting, provider lyrics or transcoding preferences. |
 | Navidrome ratings | Partial | Current-track rating works against fixture requests; selected nonplaying tracks and library-wide cached rating refresh are not implemented. |
 | Plex | Partial | Token client, section browse, basic search and finite stream URLs exist; corrected metadata tested. Token setup is inaccessible in the form; saved playlists/pagination/reporting omitted. Real server unverified. |
 | Jellyfin / Emby | Broken | Client exists, but login expects `SessionToken`; native fixture/API response contains `AccessToken`. Query keys use `Recursive.True` and `Album` rather than native `Recursive` / `MusicAlbum`; server routes/auth/cache behavior need a real contract pass. No playback reports or server resume. |
-| Audiobookshelf | Broken | Login helper is not wired into setup and expects `access_token` instead of native nested `user.token` / `accessToken`. Library client expects a top-level array, whereas native fixtures use `{libraries:[...]}`. Generic browser passes an item ID to the library-items endpoint. No multi-file sessions/progress. |
+| Audiobookshelf | Partial | Token or username/password login, native-shaped library/list/item responses, multi-file books and podcast episodes are wired to the browser. Per-file resume is local; no server-side progress sync or live server validation. Search expands results to playable tracks. |
 | Lyrion/LMS | Broken | Sends a command string in `slim.request` instead of the command token array; reads `artists`/`albums`/`tracks` instead of `*_loop`. Generic browser requires credentials although URL-only is valid. Authenticated media URLs and plugin-track filtering need adaptation. |
-| Server setup | Partial | URL/user/password persist. No token input despite token-dependent clients, connection test, edit/remove flow once configured, auth refresh policy or config import/export. |
+| Server setup | Partial | URL/user/password and an API token field are available. No connection test, edit/remove flow once configured, auth refresh policy or config import/export. |
 | Spotify | Missing / Native | No Spotify client, sign-in, librespot playback or related-track discovery. Needs a separate browser-compatible playback/auth design or companion. |
 | YouTube / YouTube Music / Bilibili / Xiaoyuzhou | Missing / Native | No search, extractor, cookies or playback adapter. Existing direct-audio URLs are not equivalent to these providers. |
 | SoundCloud / Mixcloud / NetEase / Yandex Music | Missing / Native | No account/catalog/resolver integration. Native uses API/cookies and/or yt-dlp not present here. |
@@ -142,9 +145,9 @@ Native references: [playlists](https://github.com/bjarneo/cliamp/blob/v2.4.0/doc
 
 | Feature | Status | Finding |
 | --- | --- | --- |
-| Playlist model, repeat/shuffle/reverse, queue precedence | Implemented | Pure model covered by tests, including identity preservation and queue remapping. Native list persistence is separate and absent. |
-| Queue add/remove/reorder/clear/undo UI | Missing | Model methods/store toggle exist; no visible queue controls or manager use them. A model method is not a user feature. |
-| Saved playlists / create / rename / sort / multi-select / search | Missing | No saved-playlist store/manager, playlist search or normal remove/reorder/undo controls. Reversal is exposed. |
+| Playlist model, repeat/shuffle/reverse, queue precedence | Implemented | Pure model covered by tests, including identity preservation, album-cursor continuation after play-next, and queue remapping. |
+| Queue add/remove/reorder/clear/undo UI | Partial | Queue view supports play-next, reorder/remove, clear with confirmation, playlist reorder/removal and undo. Queue edits are in-memory and are lost on reload. |
+| Saved playlists / create / rename / sort / multi-select / search | Partial | Named playlists can be created, renamed, played and deleted; stored locally. No sort, multi-select or search. |
 | History | Partial | 200 entries; browser records at 50% and deduplicates only consecutive repeats within five minutes. Native records at track start and deduplicates by path globally. Live/unknown-duration tracks are excluded here; decoded duration is not propagated into stored track metadata. |
 | Track favorites | Partial | localStorage list and playable rows; no Navidrome/Spotify favorite synchronization. Distinct from the separate radio URL list. |
 | Built-in visualizer names | Implemented | All 34 native names plus None in native order; registry and rendering tests. Numeric preferences migrate to names. |
@@ -192,9 +195,9 @@ Browser evidence: `src/lua/host.ts`, `src/lua/vm.ts`, `src/store/plugins.ts`,
 2. **Make playback/library controls complete.** Load albums/search results as
    playlists, expose queue editing, stop, speed and custom EQ; add saved
    playlists and URL/file import. Measure non-1× timing and track transitions.
-3. **Restore useful state.** Per-episode/book progress, proper history semantics,
-   durable playlist/queue resume, provider
-   favorites/reporting, and subscription batch actions.
+3. **Finish useful state.** Durable active queue resume, proper history semantics,
+   Audiobookshelf server-side progress, provider favorites/reporting, and
+   subscription batch actions.
 4. **Treat plugin parity as its own project.** Isolate/bound execution first;
    specify the supported native API/events, then implement HTTP/timers, queue
    APIs, import/configuration and custom visualizers. Keep unsupported APIs

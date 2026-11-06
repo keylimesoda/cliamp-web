@@ -1,3 +1,4 @@
+import ProgressLabel from "./ProgressLabel";
 import { useState } from "react";
 import { APPLE_CATEGORIES, podcastBrowse, type PodcastShow } from "../providers/podcast";
 import { usePlayerStore } from "../store/player";
@@ -33,7 +34,6 @@ interface PodcastBrowserProps {
 }
 
 export default function PodcastBrowser({ initialShow = null }: PodcastBrowserProps) {
-  const playTrack = usePlayerStore((s) => s.playTrack);
   const loadPlaylist = usePlayerStore((s) => s.loadPlaylist);
   const favorites = useFavoritesStore();
   const prefs = usePodcastPrefs();
@@ -67,7 +67,8 @@ export default function PodcastBrowser({ initialShow = null }: PodcastBrowserPro
   const back = () => setView({ kind: "home" });
   const openShow = (s: PodcastShow) => setView({ kind: "show", show: s });
   const playEpisode = (t: Track) => {
-    void playTrack(t, 0);
+    const tracks = episodes.data || [t];
+    void loadPlaylist(tracks, Math.max(0, tracks.findIndex((x) => x.path === t.path)));
   };
   const playAll = (t: Track[]) => {
     void loadPlaylist(t, 0, true);
@@ -243,7 +244,7 @@ export default function PodcastBrowser({ initialShow = null }: PodcastBrowserPro
             {(episodes.data ?? []).map((t, i) => (
               <div className="row" key={t.guid ?? t.path + i} onClick={() => playEpisode(t)} role="button" aria-label={t.title}>
                 <span className="marker" aria-hidden>♫</span>
-                <span className="title">{t.title}</span>
+                <span className="title">{t.title}<ProgressLabel track={t} /></span>
                 <span className="dur">{t.durationSecs ? fmtDur(t.durationSecs) : ""}</span>
                 <span
                   className={"save-toggle" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}

@@ -16,7 +16,7 @@ describe("Playlist", () => {
     expect(p.currentTrack?.path).toBe("t1");
     expect(p.displayAt(p.currentIndex)).toBe(2);
     p.next(); expect(p.currentTrack?.path).toBe("t3");
-    p.next(); expect(p.currentTrack?.path).toBe("t2");
+    p.next(); expect(p.currentTrack?.path).toBe("t0");
   });
   it("retains shuffled play order on reversal and restores reversed order when shuffle turns off", () => {
     const p = new Playlist();
@@ -106,7 +106,7 @@ describe("Playlist", () => {
     p.next();
     expect(p.currentIndex).toBe(2); // queue item, not sequential T1
     p.next();
-    expect(p.currentIndex).toBe(3); // progression continues forward from there
+    expect(p.currentIndex).toBe(1); // continuation resumes after the album cursor
   });
 
   it("queue toggle removes already-queued track", () => {
@@ -127,7 +127,22 @@ describe("Playlist", () => {
     expect(p.next()).toBe(true);
     expect(p.currentIndex).toBe(2);
     expect(p.next()).toBe(true);
-    expect(p.currentIndex).toBe(2);
+    expect(p.currentIndex).toBe(0); // queued track is followed by the repeat-one album cursor
+  });
+
+  it("keeps the album cursor while a queued track plays through list edits", () => {
+    const p = new Playlist();
+    p.load(tracks(3)); p.queueToggle(2); p.next();
+    p.add([{ path: "extra", title: "Extra" }]);
+    expect(p.currentTrack?.path).toBe("t2");
+    p.next(); expect(p.currentTrack?.path).toBe("t1");
+  });
+
+  it("keeps a queued track active when shuffle changes the album order", () => {
+    const p = new Playlist();
+    p.load(tracks(4)); p.queueToggle(3); p.next(); p.setShuffle("on");
+    expect(p.currentTrack?.path).toBe("t3");
+    p.next(); expect(p.currentIndex).toBe(p.indexAtDisplay(1));
   });
 
   it("shuffle preserves current track and permutes the rest", () => {

@@ -98,6 +98,7 @@ export function parseFeed(xml: string, feedUrl: string, showTitle: string, limit
       guid,
       durationSecs: duration,
       provider: "podcast",
+      kind: "podcast",
       providerMeta: {
         feedUrl,
         pubDate,

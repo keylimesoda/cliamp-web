@@ -113,7 +113,8 @@ export class AudioEngine {
       const ctx = new AudioContext({ latencyHint: "interactive" });
       this.ctx = ctx;
       void ctx.resume().catch(() => {});
-      await ctx.audioWorklet.addModule(new URL("worklets/wsola.js", document.baseURI).href);
+      try { await ctx.audioWorklet.addModule(new URL("worklets/wsola.js", document.baseURI).href); }
+      catch (e) { this.initPromise = null; this.ctx = null; void ctx.close?.().catch(() => {}); throw e; }
 
       const source = ctx.createMediaElementSource(this.processedElement);
       this.graphInput = ctx.createGain();

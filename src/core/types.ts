@@ -29,6 +29,8 @@ export interface Track {
   guid?: string;
   /** Provider id that owns this track. */
   provider?: string;
+  /** Spoken content uses independent listening progress. */
+  kind?: "podcast" | "audiobook";
   providerMeta?: Record<string, unknown>;
   /** Local playlist bookmark (star). */
   bookmark?: boolean;

@@ -1,3 +1,4 @@
+import ProgressLabel from "./ProgressLabel";
 import { useFavoritesStore } from "../store/favorites";
 import { usePodcastPrefs, type SubscribedShow } from "../store/podcastPrefs";
 import { usePlayerStore } from "../store/player";
@@ -96,13 +97,13 @@ export default function FavoritesScreen({ onOpenPodcast }: FavoritesScreenProps)
               <div
                 className="row"
                 key={t.path}
-                onClick={() => void playTrack(t, 0)}
+                onClick={() => void playTrack(t)}
                 role="button"
                 aria-label={t.title}
               >
                 <span className="marker" aria-hidden>{t.stream || t.live ? "♫" : "▸"}</span>
                 <span className="title">
-                  {t.title}
+                  {t.title}<ProgressLabel track={t} />
                   {detailFor(t) ? <span className="dim"> — {detailFor(t)}</span> : null}
                 </span>
                 <span className="favorite-kind">{kindFor(t)}</span>
