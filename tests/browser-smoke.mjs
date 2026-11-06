@@ -155,8 +155,11 @@ try {
   await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
   // Fixture Navidrome credentials and song; no personal server is contacted.
   await page.addInitScript((origin) => {
+    if (sessionStorage.getItem("fixture:navidrome-seeded")) return;
+    sessionStorage.setItem("fixture:navidrome-seeded", "1");
     localStorage.setItem("cliamp-web:servers", JSON.stringify({ navidrome: { url: origin, user: "fixture", password: "fixture" } }));
     localStorage.setItem("cliamp-web:resume", JSON.stringify({ track: { path: "navidrome://song/1", title: "Rated fixture", provider: "navidrome", providerMeta: { songId: "1" }, rating: 2 }, position: 0, at: Date.now() }));
+    localStorage.removeItem("cliamp-web:session");
   }, origin);
   let rating = 2;
   await page.route("**/rest/setRating?*", async (route) => {
@@ -238,7 +241,7 @@ try {
   await expect(page.locator(".time-status .state")).toHaveText("Playing");
   await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
   await page.addInitScript((origin) => localStorage.setItem("cliamp-web:podcast-subs", JSON.stringify([{ name: "Saved fixture show", feedUrl: origin + "/feed.xml", collectionId: 77 }])), origin);
-  await page.route("**/feed.xml", (route) => route.fulfill({ contentType: "application/rss+xml", body: `<rss version="2.0"><channel><title>Saved fixture show</title><item><title>Fixture episode</title><guid>fixture-1</guid><enclosure url="${origin}/long.wav" type="audio/wav" /></item></channel></rss>` }));
+  await page.route("**/feed.xml", (route) => route.fulfill({ contentType: "application/rss+xml", body: `<rss version="2.0"><channel><title>Saved fixture show</title><item><title>Fixture episode</title><guid>fixture-1</guid><enclosure url="${origin}/spoken.wav" type="audio/wav" /></item></channel></rss>` }));
   await page.reload();
   await page.getByRole("button", { name: "Favorites", exact: true }).tap();
   await page.getByRole("button", { name: "Saved fixture show", exact: true }).tap();
@@ -257,8 +260,10 @@ try {
   expect(savedProgress.entries[0].position).toBeGreaterThanOrEqual(14);
   await page.reload();
   await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
+  await expect(page.locator(".track-line")).toContainText("Fixture episode");
+  await expect(page.locator(".time-status .state")).toHaveText("Playing");
   const resumeAt = Math.max(0, savedProgress.entries[0].position - 5);
-  await page.waitForFunction((position) => window.__mediaElements.some((m) => !m.paused && m.duration >= 25 && Math.abs(m.currentTime - position) < 2), resumeAt, { timeout: 10000 });
+  expect(await page.evaluate((position) => window.__mediaElements.some((m) => !m.paused && m.duration >= 120 && Math.abs(m.currentTime - position) < 2), resumeAt)).toBe(true);
   expect(errors).toEqual([]);
   console.log(JSON.stringify({ passed: true, viewport: "804×638 touch, DPR 1.96", checks: ["subpath worklet", "three-track automatic progression", "queue play-next ordering and consumption", "saved playlist creation", "pause", "playlist reversal", "EQ preset dialog and Escape focus return", "touch frequency adjustment", "preset change during playback", "direct-source EQ availability notice", "saved custom EQ across presets and reload", "volume under MORE with persisted gain and reset", "visualizer persistence", "legacy None migration", "non-CORS media progression", "rating success/failure and metadata retention", "22-theme picker via playback and Settings", "live theme application without stopping playback", "theme persistence", "light and dark themes", "plugin toggles remain accessible", "Tesla FAVS station playback", "saved podcast opens and plays", "podcast progress persistence and five-second rewind", "immersive enter/exit", "no horizontal overflow", "no uncaught JS errors"], screenshots }));
 } finally { await context.close(); await browser.close(); }

@@ -40,6 +40,20 @@ export interface Track {
   rating?: number;
 }
 
+/** Validate persisted track metadata before it reaches playback or React. */
+export function isTrack(value: unknown): value is Track {
+  if (!value || typeof value !== "object") return false;
+  const t = value as Record<string, unknown>;
+  if (typeof t.path !== "string" || !t.path || typeof t.title !== "string") return false;
+  if (!["artist", "album", "genre", "artUrl", "streamTitle", "station", "feed", "guid", "provider"]
+    .every((key) => t[key] === undefined || typeof t[key] === "string")) return false;
+  if (!["durationSecs", "year", "trackNumber", "rating"].every((key) => t[key] === undefined
+    || (typeof t[key] === "number" && Number.isFinite(t[key])))) return false;
+  if (!["stream", "live", "bookmark", "favorite"].every((key) => t[key] === undefined || typeof t[key] === "boolean")) return false;
+  return (t.kind === undefined || t.kind === "podcast" || t.kind === "audiobook")
+    && (t.providerMeta === undefined || (t.providerMeta !== null && typeof t.providerMeta === "object" && !Array.isArray(t.providerMeta)));
+}
+
 export type RepeatMode = "off" | "all" | "one";
 export type ShuffleMode = "off" | "on";
 
