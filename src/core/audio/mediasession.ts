@@ -38,13 +38,13 @@ export function updateMediaSession(track: Track | null, state: PlaybackState, h:
     ms.setActionHandler("pause", h.pause);
     ms.setActionHandler("nexttrack", h.next);
     ms.setActionHandler("previoustrack", h.prev);
-    if (h.seekForward) ms.setActionHandler("seekforward", h.seekForward);
-    if (h.seekBackward) ms.setActionHandler("seekbackward", h.seekBackward);
+    ms.setActionHandler("seekforward", h.seekForward ?? null);
+    ms.setActionHandler("seekbackward", h.seekBackward ?? null);
     if (h.seekTo) {
       ms.setActionHandler("seekto", (d) => {
         if (d.seekTime !== undefined) h.seekTo!(d.seekTime);
       });
-    }
+    } else ms.setActionHandler("seekto", null);
   } catch {
     // MediaSession can throw on malformed metadata in some engines.
   }

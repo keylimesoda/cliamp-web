@@ -1,5 +1,10 @@
 import type { Track } from "./types";
 
+export function isSpokenTrack(track: Track | null | undefined): boolean {
+  return Boolean(track && !track.live && !track.stream && (track.kind === "podcast" || track.kind === "audiobook"
+    || track.provider === "podcast" || track.provider === "audiobookshelf"));
+}
+
 export interface ListeningProgress {
   key: string;
   kind: "podcast" | "audiobook";

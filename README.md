@@ -56,6 +56,10 @@ normal navigation until a session has been validated.
   Queue edits save immediately, with position checkpoints every five seconds,
   on pause and when leaving the page. Existing single-track bookmarks upgrade
   automatically. Sessions stay in this browser; clearing its storage removes them.
+- **Spoken-audio controls** — podcasts and audiobooks get **−15s**, **+30s** and
+  a **0.5×–2× speed picker** beside Play, also available in the full visualizer.
+  Speech speed is remembered across episodes, chapters and reloads; music and
+  live radio return to 1×. Skips stay within the current file and preserve pause.
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
   - **Podcasts** — Apple top charts, search, RSS enclosures.

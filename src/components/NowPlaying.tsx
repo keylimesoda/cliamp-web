@@ -10,6 +10,8 @@ import DragMeter from "./DragMeter";
 import Visualizer from "./Visualizer";
 import LyricsOverlay from "./LyricsOverlay";
 import type { Track } from "../core/types";
+import { isSpokenTrack } from "../core/listening";
+import { PlaybackSpeedPicker, SpokenSkipButton } from "./SpokenControls";
 
 function fmtTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return "--:--";
@@ -78,12 +80,13 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
   const live = s.track?.stream === true || s.track?.live === true;
   const shownPos = scrubPos ?? s.position;
   const seekRatio = s.duration > 0 ? shownPos / s.duration : 0;
+  const spoken = isSpokenTrack(s.track);
 
   if (showQueue) return <QueueScreen onClose={() => setShowQueue(false)} />;
 
   if (immersive) {
     return (
-      <div className="immersive-app">
+      <div className={"immersive-app" + (spoken ? " is-spoken" : "")}>
         <div className="immersive-track-line">
           {hideImmersiveTitle ? (
             <span className="name dim">[{sourceName(s.track)}]</span>
@@ -134,14 +137,17 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
           <button onClick={() => void s.prev()} aria-label="Previous track">
             <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
           </button>
+          {spoken && <SpokenSkipButton seconds={-15} />}
           <button className="immersive-play" onClick={() => void s.toggle()} aria-label="Play or pause">
             <span className="nf-icon transport-icon" aria-hidden>
               {playing ? "\uf04c" : "\uf04b"}
             </span>
           </button>
+          {spoken && <SpokenSkipButton seconds={30} />}
           <button onClick={() => void s.next()} aria-label="Next track">
             <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
           </button>
+          {spoken && <PlaybackSpeedPicker />}
           <button onClick={() => setHideImmersiveTitle((v) => !v)} aria-label="Toggle track title or source">
             {hideImmersiveTitle ? "TITLE" : "SOURCE"}
           </button>
@@ -195,21 +201,24 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
           </div>
         )}
 
-        <div className="transport-row">
+        <div className={"transport-row" + (spoken ? " is-spoken" : "")}>
           <button className="compact-more-toggle" onClick={() => setShowAdvanced(true)} aria-expanded={showAdvanced} aria-controls="advanced-controls">MORE</button>
           <div className="transport">
             <button onClick={() => void s.prev()} aria-label="Previous">
               <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
             </button>
+            {spoken && <SpokenSkipButton seconds={-15} />}
             <button className="btn-primary" onClick={() => void s.toggle()} aria-label="Play/Pause">
               <span className="nf-icon transport-icon" aria-hidden>
                 {playing ? "\uf04c" : "\uf04b"}
               </span>
             </button>
+            {spoken && <SpokenSkipButton seconds={30} />}
             <button onClick={() => void s.next()} aria-label="Next">
               <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
             </button>
           </div>
+          {spoken && <PlaybackSpeedPicker />}
           <button
             className="viz-full-toggle"
             onClick={() => onImmersiveChange?.(true)}
