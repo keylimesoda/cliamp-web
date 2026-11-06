@@ -9,18 +9,20 @@ vi.mock("../core/audio/engine", () => ({
     track: Track | null = null;
     state = "stopped";
     position = 0;
+    speed = 1;
     listeners = new Set<(s: unknown) => void>();
     constructor(readonly cb: { onTrackEnd: (promoted: boolean) => void }) {}
-    snapshot() { return { track: this.track, state: this.state, volumeDb: 0, speed: 1, mono: false, eqGains: Array(10).fill(0), dspAvailable: true }; }
+    snapshot() { return { track: this.track, state: this.state, volumeDb: 0, speed: this.speed, mono: false, eqGains: Array(10).fill(0), dspAvailable: true }; }
     subscribe(fn: (s: unknown) => void) { this.listeners.add(fn); }
     notify() { this.listeners.forEach((fn) => fn(this.snapshot())); }
     async init() {}
     async load(track: Track, _source: unknown, start = 0) { this.track = track; this.position = start; this.state = "playing"; this.notify(); }
     async play() { this.state = "playing"; this.notify(); }
     pause() { this.state = "paused"; this.notify(); }
-    getPosition() { return this.position; } getDuration() { return this.track?.durationSecs || 10; } isSeekable() { return true; }
+    getPosition() { return this.position; } getDuration() { return this.track?.durationSecs || 10; } isSeekable() { return Boolean(this.track) && !this.track?.live && !this.track?.stream; }
     seek(position: number) { this.position = position; }
-    clearPreload() {} armGapless() {} startTick() {} setEqGains() {} setSpeed() {} setVolumeDb() {} setMono() {}
+    clearPreload() {} armGapless() {} startTick() {} setEqGains() {} setVolumeDb() {} setMono() {}
+    setSpeed(speed: number) { this.speed = speed; this.notify(); }
     end(promoted: boolean, track?: Track) { if (track) this.track = track; this.cb.onTrackEnd(promoted); }
   },
 }));
@@ -127,9 +129,38 @@ describe("full session restore", () => {
     mod.getEngine()!.pause();
     expect(JSON.parse(storage.get("cliamp-web:session")!).position).toBe(4);
   });
+  it("remembers speech speed across reloads and track changes without speeding up music", async () => {
+    const episode = { path: "episode", title: "Episode", provider: "podcast", durationSecs: 300 };
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist([episode, tracks[0]]);
+    s.setSpeed(1.5); s.pause(); await reload();
+    expect(mod.usePlayerStore.getState().spokenSpeed).toBe(1.5);
+    await mod.usePlayerStore.getState().play(); expect(mod.usePlayerStore.getState().speed).toBe(1.5);
+    await mod.usePlayerStore.getState().next(); expect(mod.usePlayerStore.getState().speed).toBe(1);
+    await mod.usePlayerStore.getState().playTrack(episode); expect(mod.usePlayerStore.getState().speed).toBe(1.5);
+  });
   it.each(["{", JSON.stringify({ version: 99 }), JSON.stringify({ version: 1, playlist: {} })])("ignores damaged or unknown sessions: %s", async (saved) => {
     storage.set("cliamp-web:session", saved); await reload();
     expect(mod.usePlayerStore.getState()).toMatchObject({ track: null, tracks: [], state: "stopped" });
+  });
+});
+
+describe("relative spoken seeking", () => {
+  it("uses the current engine clock, keeps pause, and bounds both directions to the current file", async () => {
+    await mod.usePlayerStore.getState().playTrack({ path: "book", title: "Book", kind: "audiobook", durationSecs: 100 });
+    mod.usePlayerStore.getState().pause();
+    mod.getEngine()!.seek(62); // UI polling may still show the old position
+    mod.usePlayerStore.getState().seekRelative(-15);
+    expect(mod.getEngine()!.getPosition()).toBe(47);
+    mod.usePlayerStore.getState().seekRelative(30); expect(mod.getEngine()!.getPosition()).toBe(77);
+    mod.usePlayerStore.getState().seekRelative(30); expect(mod.getEngine()!.getPosition()).toBe(99.9);
+    mod.usePlayerStore.getState().seekRelative(-1000); expect(mod.getEngine()!.getPosition()).toBe(0);
+    expect(mod.usePlayerStore.getState().state).toBe("paused");
+  });
+  it("ignores live seeking and invalid offsets", async () => {
+    const s = mod.usePlayerStore.getState(); await s.playTrack(tracks[0]);
+    s.seekRelative(NaN); s.seekRelative(Infinity); expect(mod.getEngine()!.getPosition()).toBe(0);
+    await s.playTrack({ path: "live", title: "Live", live: true, stream: true });
+    const seek = vi.spyOn(mod.getEngine()!, "seek"); s.seekRelative(30); expect(seek).not.toHaveBeenCalled();
   });
 });
 

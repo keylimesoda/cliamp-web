@@ -10,6 +10,7 @@ class FakeAudio extends EventTarget {
   static all: FakeAudio[] = [];
   src = ""; crossOrigin = ""; preload = ""; currentTime = 0; duration = 10;
   paused = true; readyState = 1; volume = 1; playbackRate = 1; error = null;
+  defaultPlaybackRate = 1; preservesPitch = true;
   playResult: Promise<void> | null = null;
   constructor() { super(); FakeAudio.all.push(this); }
   load() {}
@@ -50,6 +51,28 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("audio engine regressions", () => {
+  it("uses native pitch-preserving speed for processed books and restores normal music timing", async () => {
+    const engine = new AudioEngine();
+    await engine.load({ ...track("book"), provider: "audiobookshelf" }, source("book.wav"));
+    engine.setSpeed(2);
+    expect(FakeAudio.all[0]).toMatchObject({ playbackRate: 2, defaultPlaybackRate: 2, preservesPitch: true });
+    FakeAudio.all[0].currentTime = 45; expect(engine.getPosition()).toBe(45);
+    engine.seek(75); expect(engine.getPosition()).toBe(75);
+    await engine.load(track("music"), source("music.wav"));
+    engine.setSpeed(1); expect(FakeAudio.all[0].playbackRate).toBe(1);
+  });
+  it("keeps direct podcast speed on subsequent episode loads", async () => {
+    const engine = new AudioEngine(); engine.setSpeed(1.5);
+    await engine.load({ ...track("one"), provider: "podcast" }, { ...source("one.wav"), direct: true });
+    await engine.load({ ...track("two"), provider: "podcast" }, { ...source("two.wav"), direct: true });
+    expect(FakeAudio.all[1]).toMatchObject({ playbackRate: 1.5, defaultPlaybackRate: 1.5, preservesPitch: true });
+  });
+  it("does not bridge from a sped-up spoken track into the next music track", async () => {
+    const engine = new AudioEngine();
+    await engine.load({ ...track("book"), kind: "audiobook" }, source("book.wav")); engine.setSpeed(2);
+    const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+    engine.armGapless(track("music"), "music.wav"); expect(fetcher).not.toHaveBeenCalled();
+  });
   it("plays direct podcast sources without a worklet and keeps pause/seek functional", async () => {
     const onTrackEnd = vi.fn();
     const previousContext = Context.current;

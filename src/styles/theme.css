@@ -1114,6 +1114,41 @@ select {
   min-width: 0;
 }
 
+.transport-row.is-spoken {
+  grid-template-columns: var(--tap-min) minmax(0, 1fr) auto minmax(0, 1fr) var(--tap-min);
+}
+.transport-row.is-spoken > .compact-more-toggle { grid-column: 1; grid-row: 1; }
+.transport-row.is-spoken > .transport { grid-column: 3; grid-row: 1; }
+.transport-row.is-spoken > .spoken-speed { grid-column: 4; grid-row: 1; justify-self: end; }
+.transport-row.is-spoken > .viz-full-toggle { grid-column: 5; grid-row: 1; }
+.spoken-skip { font-variant-numeric: tabular-nums; }
+.spoken-speed {
+  min-height: var(--tap-min);
+  width: 96px;
+  min-width: 0;
+  padding: 0.35rem 0.4rem;
+  font: inherit;
+  color: var(--text-accent);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.spoken-speed:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.immersive-app.is-spoken { grid-template-rows: 22px 22px 5px minmax(0, 1fr) 5px 28px var(--tap-min) 8px; }
+.immersive-app.is-spoken .immersive-controls { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.immersive-app.is-spoken .immersive-controls button { min-height: var(--tap-min); height: var(--tap-min); }
+.immersive-app .spoken-speed { width: 100%; }
+@media (max-width: 680px) {
+  .transport-row.is-spoken { grid-template-columns: var(--tap-min) minmax(0, 1fr) var(--tap-min); }
+  .transport-row.is-spoken > .spoken-speed { grid-column: 2; grid-row: 1; justify-self: center; }
+  .transport-row.is-spoken > .viz-full-toggle { grid-column: 3; }
+  .transport-row.is-spoken > .transport { grid-column: 1 / -1; grid-row: 2; gap: 2px; }
+  .transport-row.is-spoken .transport button { min-width: var(--tap-min); padding-inline: 0.3rem; }
+  .immersive-app.is-spoken { grid-template-rows: 22px 22px 5px minmax(0, 1fr) 5px 28px calc(var(--tap-min) * 2 + 4px) 8px; }
+  .immersive-app.is-spoken .immersive-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .transport-row > .compact-more-toggle {
   width: var(--tap-min);
   min-width: 0;

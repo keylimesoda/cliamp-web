@@ -35,7 +35,7 @@ import { useHistoryStore } from "./history";
 import { navidromeBrowse } from "../providers/navidrome";
 import { useServers } from "./servers";
 import { useListening } from "./listening";
-import { findProgress, listeningKey, resumePosition } from "../core/listening";
+import { findProgress, isSpokenTrack, listeningKey, resumePosition } from "../core/listening";
 import { PlaybackRecovery, type RecoveryStatus } from "../core/audio/recovery";
 
 // ---- module singletons (not reactive) --------------------------------
@@ -135,6 +135,7 @@ function validEqGains(value: unknown): number[] | null {
 interface PersistedSettings {
   volumeDb?: number;
   speed?: number;
+  spokenSpeed?: number;
   mono?: boolean;
   eqGains?: number[];
   eqPreset?: string;
@@ -172,6 +173,7 @@ function persistSettings(): void {
   writeJson(SETTINGS_KEY, {
     volumeDb: s.volumeDb,
     speed: s.speed,
+    spokenSpeed: s.spokenSpeed,
     mono: s.mono,
     eqGains: s.eqGains,
     eqPreset: s.eqPreset,
@@ -215,6 +217,7 @@ export interface PlayerState {
   // settings
   volumeDb: number;
   speed: number;
+  spokenSpeed: number;
   mono: boolean;
   eqGains: number[];
   eqPreset: string;
@@ -250,6 +253,7 @@ export interface PlayerState {
   pause: () => void;
   toggle: () => Promise<void>;
   seek: (sec: number) => void;
+  seekRelative: (seconds: number) => void;
   next: () => Promise<void>;
   prev: () => Promise<void>;
   setVolume: (db: number) => void;
@@ -307,9 +311,8 @@ function syncMediaSession(): void {
     prev: () => void usePlayerStore.getState().prev(),
   };
   if (s.seekable) {
-    handlers.seekForward = () =>
-      usePlayerStore.getState().seek(Math.min(s.position + 10, s.duration || 0));
-    handlers.seekBackward = () => usePlayerStore.getState().seek(Math.max(s.position - 10, 0));
+    handlers.seekForward = () => usePlayerStore.getState().seekRelative(isSpokenTrack(s.track) ? 30 : 10);
+    handlers.seekBackward = () => usePlayerStore.getState().seekRelative(isSpokenTrack(s.track) ? -15 : -10);
     handlers.seekTo = (t: number) => usePlayerStore.getState().seek(t);
   }
   updateMediaSession(s.track, s.state, handlers);
@@ -367,11 +370,12 @@ async function armNextGapless(): Promise<void> {
   if (!eng || !pl) return;
   const generation = ++preloadGeneration;
   eng.clearPreload();
+  if (isSpokenTrack(usePlayerStore.getState().track)) return;
   if (usePlayerStore.getState().track?.path !== pl.currentTrack?.path) return;
   const idx = nextTrackIndex();
   if (idx === -1) return;
   const next = pl.track(idx);
-  if (!next || next.live || listeningKey(next)) return;
+  if (!next || next.live || isSpokenTrack(next)) return;
   try {
     const src = await resolveTrack(next);
     if (generation === preloadGeneration && src.seekable && !src.direct) eng.armGapless(next, src.url, src.headers);
@@ -433,6 +437,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   seekable: false,
   volumeDb: 0,
   speed: 1,
+  spokenSpeed: 1,
   mono: false,
   eqGains: new Array(10).fill(0),
   eqPreset: "Flat",
@@ -505,12 +510,16 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     if (saved) {
       const shuffle = saved.shuffle === "on" ? "on" : "off";
       const repeat = saved.repeat === "all" || saved.repeat === "one" ? saved.repeat : "off";
+      const savedSpeed = saved.spokenSpeed ?? saved.speed;
+      const spokenSpeed = typeof savedSpeed === "number" && Number.isFinite(savedSpeed)
+        ? Math.min(SPEED_MAX, Math.max(SPEED_MIN, savedSpeed)) : 1;
       const gains = validEqGains(saved.eqGains) ?? new Array(EQ_BANDS_HZ.length).fill(0);
       const custom = validEqGains(saved.customEqGains)
         ?? (saved.eqPreset === "Custom" && saved.customEqGains === undefined ? validEqGains(saved.eqGains) : null);
       set({
         volumeDb: saved.volumeDb ?? 0,
         speed: saved.speed ?? 1,
+        spokenSpeed,
         mono: saved.mono ?? false,
         eqGains: gains,
         eqPreset: saved.eqPreset ?? "Flat",
@@ -587,6 +596,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     ++preloadGeneration;
     engine!.pause();
     engine!.clearPreload();
+    engine!.setSpeed(isSpokenTrack(track) ? get().spokenSpeed : 1);
     // Create/resume the context while the initiating touch still has activation.
     const initialized = track.provider === "podcast" ? Promise.resolve() : engine!.init();
     const start = startAtSec ?? resumePosition(findProgress(useListening.getState().entries, track));
@@ -649,13 +659,20 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
 
   seek(sec) {
     const eng = engine;
-    if (!eng || !eng.isSeekable()) return;
+    if (!eng || !eng.isSeekable() || !Number.isFinite(sec) || transitioning) return;
+    sec = Math.max(0, Math.min(sec, Math.max(0, eng.getDuration() - 0.1)));
     eng.seek(sec);
     lastPosition = recoveryPosition = sec;
     lastAdvanceAt = Date.now();
     void armNextGapless();
     set({ position: sec });
     persistSession();
+  },
+
+  seekRelative(seconds) {
+    const eng = engine;
+    if (!eng || !Number.isFinite(seconds) || get().track?.live || get().track?.stream) return;
+    get().seek(eng.getPosition() + seconds);
   },
 
   async next() {
@@ -686,7 +703,10 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     persistSettings();
   },
   setSpeed(s) {
-    engine?.setSpeed(Math.min(SPEED_MAX, Math.max(SPEED_MIN, s)));
+    if (!Number.isFinite(s)) return;
+    s = Math.min(SPEED_MAX, Math.max(SPEED_MIN, s));
+    if (isSpokenTrack(get().track)) set({ spokenSpeed: s });
+    engine?.setSpeed(s);
     persistSettings();
   },
   setMono(on) {

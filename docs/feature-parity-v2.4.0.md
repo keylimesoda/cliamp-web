@@ -87,7 +87,7 @@ Browser evidence: `src/core/audio/engine.ts`, `wsola.test.ts`,
 | Automatic next / repeat / shuffle | Implemented | Album/search selections from Navidrome, Audiobookshelf and podcasts now load contextual track lists. Queue precedence, album-cursor continuation, repeat-one, natural end and three-track progression are covered by model/browser tests. Other provider selections may still be detached. |
 | Race-safe manual selection and preload changes | Implemented | Resolver/load/preload generations and aborts; unit tests cover late replies and pause during resolution. |
 | Ten-band parametric EQ and built-in curves | Partial | Frequencies, Q, gains and presets ported. Ten touch sliders adjust −12 to +12 dB, with a named preset popup and a separate saved Custom slot. Changes and the saved curve persist locally. Non-CORS/direct playback bypasses DSP; the EQ panel identifies an unavailable source while retaining the curve. |
-| Playback speed 0.25–2× / pitch preservation | Partial | WSOLA algorithm and store setter exist. No speed control is exposed in the touch UI. Source time/end events still run on the media element/buffer's clock; non-1× timeline, overflow/drain and track-boundary correctness need end-to-end work. Unit DSP tests do not establish native timing parity. |
+| Playback speed 0.25–2× / pitch preservation | Partial | Podcasts/books expose −15s/+30s and a 0.5–2× picker in main and immersive playback, with an independent persisted speech rate and 1× music/radio. Spoken transport uses native pitch-preserving media rates; processed books keep EQ with unity-rate WSOLA, avoiding real-time input starvation and doubled speed processing. Browser fixtures measure direct/processed clocks at 1.5×/2×, retain a 440 Hz tone at 2×, verify paused seeking/bounds and natural chapter/episode transitions. Native global speed parity is still partial: non-1× music/decoded-bridge WSOLA timing and drain behavior remain unverified. |
 | Mono output | Partial | Web Audio downmix/upmix and touch toggle exist; actual L/R output not measured. Non-CORS fallback cannot apply mono. |
 | Gapless playback | Partial | Best-effort fetch/decode bridge; no sample-accurate or audibly gapless guarantee. Limited to known durations ≤10 minutes and encoded downloads ≤32 MiB to bound car memory. Deferred/late preloads tested. Decoder delay/padding trimming and native preload scheduling are not ported. |
 | Native formats / FFmpeg / HLS / ICY demux | Native | Playback depends on the browser codec/media stack. No FFmpeg, HLS adapter, ICY title stripping or chained OGG parser. A directly playable URL may work, but native format coverage is not established. |
@@ -190,23 +190,22 @@ Browser evidence: `src/lua/host.ts`, `src/lua/vm.ts`, `src/store/plugins.ts`,
 | v2.4 image/layout/ui/vis APIs | Missing | No panes, image/text blocks, selectors or selector events. |
 | Plugin management and trust/runtime limits | Missing | No source import/install/remove/trust UI or content approvals. Shared VM has no execution budget/worker isolation; control gating does not cover top-level calls without an active plugin. Arbitrary native plugins should not be advertised as compatible or sandboxed. |
 | Native shell execution / filesystem / IPC / daemon | Native | No shell, native filesystem, Unix socket/V2 jobs, remote CLI or background daemon. A companion would be a separate architectural choice. |
-| MediaSession | Partial | Basic metadata/control adapter is implemented. No native MPRIS/Now Playing parity claim; real Tesla steering-wheel/system behavior untested. |
+| MediaSession | Partial | Basic metadata/control adapter is implemented. Spoken seek actions use fresh source positions (−15/+30), and seek handlers clear on live sources. Fixture checks cover the callbacks; real Tesla steering-wheel/system behavior and native MPRIS parity remain untested. |
 | Static PWA | Partial | Install manifest, versioned app-shell worker, relative assets/worklet. Media/APIs are network-only. No offline media or offline regression test, and no guarantee of persistence/installation on Tesla. |
 
 ## Recommended follow-up order for Tesla
 
 Full-session restore is implemented and covered by regression checks. Next:
 
-1. **Expose spoken-audio controls.** Add large rewind/forward buttons and a
-   speed picker for podcasts and books. Relative seek and speed APIs already
-   exist; verify non-1× timing and transitions before presenting them as ready.
-2. **Pick visualizers by name.** A popup avoids cycling through 34 modes to
+Spoken transport controls are also implemented and verified with synthetic media.
+
+1. **Pick visualizers by name.** A popup avoids cycling through 34 modes to
    reach a favorite. All 34 modes are already present; rendering cleanup is a
    separate deferred task. Native cliamp also has a visualizer picker.
-3. **Collect latest/unplayed episodes from saved shows.** Build a convenient
+2. **Collect latest/unplayed episodes from saved shows.** Build a convenient
    departure queue from existing subscriptions, progress and played markers.
    This is a browser convenience built on existing functionality.
-4. **Add station and podcast-feed URLs directly.** Allow sources missing from
+3. **Add station and podcast-feed URLs directly.** Allow sources missing from
    search to be saved and reused through the existing favorites UI.
 
 Real-account Plex and browser-only Qobuz validation remain separate provider
@@ -232,6 +231,7 @@ omabox up --new --size 1024x768 --net isolated --allow 4173,4174 --no-shell
 # Use the box name printed above in place of NAME:
 omabox -b NAME run -- node "$PWD/tests/browser-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/session-smoke.mjs"
+omabox -b NAME run -- node "$PWD/tests/spoken-smoke.mjs"
 omabox -b NAME down
 ```
 

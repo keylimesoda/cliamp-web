@@ -7,6 +7,9 @@
  *           → volume gain → stereo out → destination
  *                          ↘ mono downmix → upmix → mono out → destination
  *
+ * Spoken media uses native pitch-preserving playbackRate before Web Audio;
+ * the worklet stays at unity so source time and audio consumption agree.
+ *
  * Transitions: short finite tracks can be fetched/decoded ahead of time.
  * On end, the decoded next track enters the same DSP chain and the store
  * advances the playlist. This is best-effort, not sample-accurate gapless.
@@ -16,6 +19,7 @@
  */
 import { EQ_BANDS_HZ, EQ_Q, clampDb } from "../eq";
 import { bandLevels, FFT_SIZE, Spectrum } from "../spectrum";
+import { isSpokenTrack } from "../listening";
 import type { PlaybackState, ResolvedSource, Track } from "../types";
 
 export const VOLUME_MIN_DB = -50;
@@ -195,6 +199,7 @@ export class AudioEngine {
       this.element.pause();
       this.resumeCleanup?.();
       this.track = track;
+      this.applySpeedToWorklet();
       this.seekable = src.seekable === true;
       this.stopGapless();
       this.processedElement.pause();
@@ -221,6 +226,7 @@ export class AudioEngine {
     this.element.pause();
     this.resumeCleanup?.();
     this.track = track;
+    this.applySpeedToWorklet();
     this.seekable = src.seekable === true;
     this.stopGapless();
     this.resetWorklet();
@@ -365,7 +371,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     this.clearPreload();
     // Avoid decoding long podcasts or unbounded downloads into car memory.
-    if (!track.durationSecs || track.durationSecs > 600 || track.live) return;
+    if (!track.durationSecs || track.durationSecs > 600 || track.live || isSpokenTrack(track) || isSpokenTrack(this.track)) return;
     const generation = this.preloadGeneration;
     const abort = new AbortController();
     this.preloadAbort = abort;
@@ -462,7 +468,17 @@ export class AudioEngine {
   }
 
   private applySpeedToWorklet(): void {
-    this.wsolaNode?.port.postMessage({ type: "speed", value: this.speed });
+    // A real-time media input cannot feed WSOLA faster than the media clock.
+    // Spoken audio uses the browser's pitch-preserving transport rate, keeping
+    // the clock, seeking, duration and track boundaries in source seconds.
+    const spoken = isSpokenTrack(this.track);
+    this.processedElement.preservesPitch = true;
+    this.plainElement.preservesPitch = true;
+    this.processedElement.defaultPlaybackRate = spoken ? this.speed : 1;
+    this.plainElement.defaultPlaybackRate = this.speed;
+    this.processedElement.playbackRate = spoken ? this.speed : 1;
+    this.plainElement.playbackRate = this.speed;
+    this.wsolaNode?.port.postMessage({ type: "speed", value: spoken ? 1 : this.speed });
   }
 
   // ---- state / queries ------------------------------------------------
