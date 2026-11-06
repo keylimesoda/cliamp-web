@@ -183,7 +183,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
           <div className="plugin-status dim">{pluginStatus}</div>
         ) : null}
 
-        <Visualizer />
+        <Visualizer onOpenFull={() => onImmersiveChange?.(true)} />
 
         {s.seekable ? (
           <DragMeter
@@ -219,13 +219,6 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
             </button>
           </div>
           {spoken && <PlaybackSpeedPicker />}
-          <button
-            className="viz-full-toggle"
-            onClick={() => onImmersiveChange?.(true)}
-            aria-label="Open full visualizer"
-          >
-            <span className="viz-full-glyph" aria-hidden>V</span>
-          </button>
         </div>
 
         <div className="mix">

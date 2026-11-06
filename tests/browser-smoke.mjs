@@ -142,10 +142,10 @@ try {
   // Each new mode remains selected on reload, including a migrated legacy None.
   for (const name of ["YinYang", "Ethereal", "None"]) {
     await page.evaluate((n) => localStorage.setItem("cliamp-web:viz", n), name); await page.reload();
-    await expect(page.locator(".viz-name")).toHaveText(name);
+    await expect(page.locator("canvas.visualizer")).toHaveAttribute("aria-label", `Visualizer: ${name}. Tap to switch.`);
   }
   await page.evaluate(() => localStorage.setItem("cliamp-web:viz", "32")); await page.reload();
-  await expect(page.locator(".viz-name")).toHaveText("None");
+  await expect(page.locator("canvas.visualizer")).toHaveAttribute("aria-label", "Visualizer: None. Tap to switch.");
   await page.getByRole("button", { name: "Radio", exact: true }).tap();
   await page.getByRole("button", { name: "No-CORS live", exact: true }).tap();
   await page.getByRole("button", { name: "Now Playing", exact: true }).tap();
@@ -190,7 +190,7 @@ try {
     await page.evaluate((n) => localStorage.setItem("cliamp-web:viz", n), name); await page.reload();
     await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
     await expect(page.locator(".time-status .state")).toHaveText("Playing");
-    await expect(page.locator(".viz-name")).toHaveText(name);
+    await expect(page.locator("canvas.visualizer")).toHaveAttribute("aria-label", `Visualizer: ${name}. Tap to switch.`);
     await page.evaluate(() => new Promise(requestAnimationFrame));
     await page.screenshot({ path: join(screenshots, `${name.toLowerCase()}-804x638.png`) });
   }
