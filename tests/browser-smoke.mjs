@@ -44,6 +44,47 @@ await page.route("https://radio.cliamp.stream/**", (route) => {
 });
 try {
   await page.goto(app);
+  const playerVolume = page.getByRole("slider", { name: "Player volume", exact: true });
+  await expect(playerVolume).not.toBeVisible();
+  await page.getByRole("button", { name: "MORE", exact: true }).tap();
+  await expect(playerVolume).toHaveValue("0");
+  await playerVolume.focus(); await playerVolume.press("ArrowLeft");
+  await expect(playerVolume).toHaveValue("-1");
+  await page.reload();
+  await expect(playerVolume).not.toBeVisible();
+  await page.getByRole("button", { name: "MORE", exact: true }).tap();
+  await expect(playerVolume).toHaveValue("-1");
+  await page.getByRole("button", { name: "Reset player volume", exact: true }).tap();
+  await expect(playerVolume).toHaveValue("0");
+  const band70 = page.getByRole("slider", { name: "EQ 70 Hz", exact: true });
+  await band70.tap({ position: { x: 30, y: 30 } });
+  const customGain = Number(await band70.inputValue());
+  expect(customGain).toBeGreaterThan(0);
+  await expect(page.getByRole("button", { name: "EQ preset: Custom", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Save custom EQ", exact: true }).tap();
+  await expect(page.getByRole("status")).toContainText("Custom EQ saved");
+  const eqScreenshots = join(process.env.HOME, "cliamp-browser-evidence"); await mkdir(eqScreenshots, { recursive: true });
+  await page.screenshot({ path: join(eqScreenshots, "eq-controls-804x638.png") });
+  await page.getByRole("button", { name: "EQ preset: Custom", exact: true }).tap();
+  const eqDialog = page.getByRole("dialog", { name: "Choose EQ preset" });
+  await expect(eqDialog).toBeVisible();
+  await page.screenshot({ path: join(eqScreenshots, "eq-presets-804x638.png") });
+  await eqDialog.getByRole("button", { name: "Rock", exact: true }).tap();
+  await expect(eqDialog).not.toBeVisible();
+  await expect(band70).toHaveValue("5");
+  await page.getByRole("button", { name: "EQ preset: Rock", exact: true }).tap();
+  await eqDialog.getByRole("button", { name: "Saved custom EQ", exact: true }).tap();
+  await expect(band70).toHaveValue(String(customGain));
+  await page.reload();
+  await page.getByRole("button", { name: "MORE", exact: true }).tap();
+  await expect(band70).toHaveValue(String(customGain));
+  await expect(page.getByRole("button", { name: "Save custom EQ", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "EQ preset: Custom", exact: true }).tap();
+  await page.keyboard.press("Escape");
+  await expect(eqDialog).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "EQ preset: Custom", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Close playback options", exact: true }).tap();
+  await expect(playerVolume).not.toBeVisible();
   await page.getByRole("button", { name: "Radio", exact: true }).tap();
   await page.getByRole("button", { name: "Demo channel", exact: true }).tap();
   await page.getByRole("button", { name: "Now Playing", exact: true }).tap();
@@ -51,6 +92,12 @@ try {
   await expect(page.locator(".time-status .state")).toHaveText("Playing");
   await expect(page.locator(".track-line")).toContainText("Fixture B", { timeout: 10000 });
   await expect(page.locator(".track-line")).toContainText("Fixture C", { timeout: 10000 });
+  await page.getByRole("button", { name: "MORE", exact: true }).tap();
+  await page.getByRole("button", { name: /EQ preset:/ }).tap();
+  await page.getByRole("dialog", { name: "Choose EQ preset" }).getByRole("button", { name: "Flat", exact: true }).tap();
+  await expect(page.locator(".time-status .state")).toHaveText("Playing");
+  await expect(page.getByText("EQ is unavailable for this source.", { exact: false })).not.toBeVisible();
+  await page.getByRole("button", { name: "Close playback options", exact: true }).tap();
   await expect(page.getByRole("button", { name: "Open queue", exact: true })).not.toBeVisible();
   await page.getByRole("button", { name: "MORE", exact: true }).tap();
   await page.getByRole("button", { name: "Open queue", exact: true }).tap();
@@ -80,8 +127,9 @@ try {
   await page.getByRole("button", { name: "Reverse list", exact: true }).tap();
   expect(await page.locator(".list .row .title").allTextContents()).toEqual(beforeReverse.toReversed());
   await expect(page.locator(".track-line")).toContainText("Fixture C");
-  await page.getByRole("button", { name: "Previous EQ preset" }).tap();
-  await expect(page.getByRole("button", { name: "EQ Small Speakers", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /EQ preset:/ }).tap();
+  await page.getByRole("dialog", { name: "Choose EQ preset" }).getByRole("button", { name: "Small Speakers", exact: true }).tap();
+  await expect(page.getByRole("button", { name: "EQ preset: Small Speakers", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close playback options" }).tap();
   expect(await page.evaluate(() => window.__workletUrls)).toContain(app + "worklets/wsola.js");
   expect(requests).not.toContain(origin + "/worklets/wsola.js");
@@ -124,7 +172,8 @@ try {
   await page.getByRole("button", { name: "Close playback options" }).tap();
   await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
   await page.getByRole("button", { name: "MORE", exact: true }).tap();
-  await page.getByRole("button", { name: "EQ Flat", exact: true }).tap();
+  await page.getByRole("button", { name: /EQ preset:/ }).tap();
+  await page.getByRole("dialog", { name: "Choose EQ preset" }).getByRole("button", { name: "Rock", exact: true }).tap();
   await expect(page.getByRole("combobox", { name: "Track rating" })).toHaveValue("5");
   await page.route("**/rest/setRating?*", (route) => send(route, { "subsonic-response": { status: "failed", error: { message: "Fixture denial" } } }));
   await page.getByRole("combobox", { name: "Track rating" }).selectOption("1");
@@ -145,6 +194,8 @@ try {
   // Theme selection is reachable from playback and Settings without stopping audio.
   await page.getByRole("button", { name: "Open full visualizer", exact: true }).tap();
   await expect(page.getByRole("button", { name: "Exit immersive visualizer", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Volume down", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Volume up", exact: true })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
   await page.getByRole("button", { name: "Exit immersive visualizer", exact: true }).tap();
   await page.getByRole("button", { name: "MORE", exact: true }).tap();
@@ -196,6 +247,9 @@ try {
   await page.getByRole("button", { name: "Now Playing", exact: true }).tap();
   await expect(page.locator(".track-line")).toContainText("Fixture episode");
   await expect(page.locator(".time-status .state")).toHaveText("Playing");
+  await page.getByRole("button", { name: "MORE", exact: true }).tap();
+  await expect(page.getByText("EQ is unavailable for this source.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Close playback options", exact: true }).tap();
   await page.waitForFunction(() => window.__mediaElements.some((m) => !m.paused && m.duration >= 25 && m.currentTime >= 16), null, { timeout: 25000 });
   await page.getByRole("button", { name: "Play/Pause", exact: true }).tap();
   const savedProgress = await page.evaluate(() => JSON.parse(localStorage.getItem("cliamp-web:listening-progress")));
@@ -206,5 +260,5 @@ try {
   const resumeAt = Math.max(0, savedProgress.entries[0].position - 5);
   await page.waitForFunction((position) => window.__mediaElements.some((m) => !m.paused && m.duration >= 25 && Math.abs(m.currentTime - position) < 2), resumeAt, { timeout: 10000 });
   expect(errors).toEqual([]);
-  console.log(JSON.stringify({ passed: true, viewport: "804×638 touch, DPR 1.96", checks: ["subpath worklet", "three-track automatic progression", "queue play-next ordering and consumption", "saved playlist creation", "pause", "playlist reversal", "previous EQ preset", "visualizer persistence", "legacy None migration", "non-CORS media progression", "rating success/failure and metadata retention", "22-theme picker via playback and Settings", "live theme application without stopping playback", "theme persistence", "light and dark themes", "plugin toggles remain accessible", "Tesla FAVS station playback", "saved podcast opens and plays", "podcast progress persistence and five-second rewind", "immersive enter/exit", "no horizontal overflow", "no uncaught JS errors"], screenshots }));
+  console.log(JSON.stringify({ passed: true, viewport: "804×638 touch, DPR 1.96", checks: ["subpath worklet", "three-track automatic progression", "queue play-next ordering and consumption", "saved playlist creation", "pause", "playlist reversal", "EQ preset dialog and Escape focus return", "touch frequency adjustment", "preset change during playback", "direct-source EQ availability notice", "saved custom EQ across presets and reload", "volume under MORE with persisted gain and reset", "visualizer persistence", "legacy None migration", "non-CORS media progression", "rating success/failure and metadata retention", "22-theme picker via playback and Settings", "live theme application without stopping playback", "theme persistence", "light and dark themes", "plugin toggles remain accessible", "Tesla FAVS station playback", "saved podcast opens and plays", "podcast progress persistence and five-second rewind", "immersive enter/exit", "no horizontal overflow", "no uncaught JS errors"], screenshots }));
 } finally { await context.close(); await browser.close(); }

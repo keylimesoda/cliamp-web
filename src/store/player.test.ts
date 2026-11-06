@@ -10,7 +10,7 @@ vi.mock("../core/audio/engine", () => ({
     state = "stopped";
     listeners = new Set<(s: unknown) => void>();
     constructor(readonly cb: { onTrackEnd: (promoted: boolean) => void }) {}
-    snapshot() { return { track: this.track, state: this.state, volumeDb: 0, speed: 1, mono: false, eqGains: Array(10).fill(0) }; }
+    snapshot() { return { track: this.track, state: this.state, volumeDb: 0, speed: 1, mono: false, eqGains: Array(10).fill(0), dspAvailable: true }; }
     subscribe(fn: (s: unknown) => void) { this.listeners.add(fn); }
     notify() { this.listeners.forEach((fn) => fn(this.snapshot())); }
     async init() {}
@@ -33,6 +33,49 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const end = (promoted: boolean, track?: Track) => (mod.getEngine() as unknown as { end: (p: boolean, t?: Track) => void }).end(promoted, track);
+
+describe("custom EQ", () => {
+  it("keeps the saved curve when presets and the working curve change", () => {
+    const s = mod.usePlayerStore.getState();
+    const curve = [2, 3, 4, 1, 0, -1, -2, 1, 2, 3];
+    const apply = vi.spyOn(mod.getEngine()!, "setEqGains");
+    s.setEqGains(curve); s.saveCustomEq();
+    expect(apply).toHaveBeenLastCalledWith(curve);
+    s.applyPreset("Rock");
+    expect(mod.usePlayerStore.getState().eqGains[0]).toBe(5);
+    s.setEqGains(Array(10).fill(-2));
+    s.applyPreset("Custom");
+    expect(mod.usePlayerStore.getState().eqGains).toEqual(curve);
+    expect(mod.usePlayerStore.getState().customEqGains).toEqual(curve);
+  });
+  it("persists separate working and saved curves and restores them on boot", async () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value) });
+    const s = mod.usePlayerStore.getState();
+    s.setEqGains(Array(10).fill(3)); s.saveCustomEq(); s.applyPreset("Flat");
+    vi.resetModules(); mod = await import("./player"); await mod.usePlayerStore.getState().boot();
+    expect(mod.usePlayerStore.getState().eqPreset).toBe("Flat");
+    expect(mod.usePlayerStore.getState().customEqGains).toEqual(Array(10).fill(3));
+    mod.usePlayerStore.getState().applyPreset("Custom");
+    expect(mod.usePlayerStore.getState().eqGains).toEqual(Array(10).fill(3));
+  });
+  it("clamps gain limits and rejects malformed curves", () => {
+    const s = mod.usePlayerStore.getState();
+    s.setEqGains([30, -30, ...Array(8).fill(0)]);
+    expect(mod.usePlayerStore.getState().eqGains.slice(0, 2)).toEqual([12, -12]);
+    s.setEqGains([1]); s.setEqGains(Array(10).fill(NaN));
+    expect(mod.usePlayerStore.getState().eqGains.slice(0, 2)).toEqual([12, -12]);
+  });
+  it("rejects malformed persisted curves without applying them to the engine", async () => {
+    vi.stubGlobal("localStorage", { getItem: (key: string) => key === "cliamp-web:settings"
+      ? JSON.stringify({ eqGains: [4], customEqGains: Array(10).fill("4") }) : null });
+    vi.resetModules(); mod = await import("./player"); await mod.usePlayerStore.getState().boot();
+    expect(mod.usePlayerStore.getState().eqGains).toEqual(Array(10).fill(0));
+    expect(mod.usePlayerStore.getState().customEqGains).toBeNull();
+    mod.usePlayerStore.getState().applyPreset("Custom");
+    expect(mod.usePlayerStore.getState().eqPreset).toBe("Flat");
+  });
+});
 
 describe("player transition guards", () => {
   it("keeps recovery enabled when delayed audio initialization notifies an unchanged paused state", async () => {
