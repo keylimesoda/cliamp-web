@@ -1231,4 +1231,3 @@ select {
 .playlist-name-form input { min-height: var(--tap-min); min-width: 0; flex: 1; background: var(--bg-sunken); color: var(--text); border: 1px solid var(--border); font: inherit; padding: 0.4rem; }
 .recovery-controls { flex-wrap: nowrap; justify-content: space-between; }
 .recovery-controls > span { overflow: hidden; text-overflow: ellipsis; }
-.queue-open { padding: 0; }

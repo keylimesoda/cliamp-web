@@ -51,6 +51,8 @@ try {
   await expect(page.locator(".time-status .state")).toHaveText("Playing");
   await expect(page.locator(".track-line")).toContainText("Fixture B", { timeout: 10000 });
   await expect(page.locator(".track-line")).toContainText("Fixture C", { timeout: 10000 });
+  await expect(page.getByRole("button", { name: "Open queue", exact: true })).not.toBeVisible();
+  await page.getByRole("button", { name: "MORE", exact: true }).tap();
   await page.getByRole("button", { name: "Open queue", exact: true }).tap();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.getByRole("button", { name: "Play next: Fixture A", exact: true }).evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(56);
@@ -61,6 +63,7 @@ try {
   await expect(page.getByRole("button", { name: /Play next \(0\)/ })).toBeVisible();
   await page.getByRole("button", { name: "Back to playback", exact: true }).tap();
   await expect(page.locator(".track-line")).toContainText("Fixture A");
+  await page.getByRole("button", { name: "MORE", exact: true }).tap();
   await page.getByRole("button", { name: "Open queue", exact: true }).tap();
   await page.getByRole("button", { name: "Save playlist", exact: true }).tap();
   await page.getByRole("textbox", { name: "Playlist name" }).fill("Tesla commute");

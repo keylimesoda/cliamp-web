@@ -203,7 +203,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
         )}
 
         <div className="transport-row">
-          <button className="queue-open" onClick={() => setShowQueue(true)} aria-label="Open queue">Q{s.queueCount ? ` ${s.queueCount}` : ""}</button>
+          <div aria-hidden />
           <div className="transport">
             <button onClick={() => void s.prev()} aria-label="Previous">
               <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
@@ -252,6 +252,9 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
               ))}
             </div>
             <div className="help-row">
+              <button className="key-pill" onClick={() => { setShowAdvanced(false); setShowQueue(true); }} aria-label="Open queue">
+                Queue{s.queueCount ? ` (${s.queueCount})` : ""}
+              </button>
               <button className="key-pill" onClick={() => s.cyclePreset(-1)} aria-label="Previous EQ preset">EQ ◀</button>
               <span className="key-pill" onClick={() => s.cyclePreset()} role="button">
                 EQ {s.eqPreset}

@@ -30,7 +30,7 @@ The exact native release and commit are recorded in [upstream.json](upstream.jso
 
 - **Now Playing** — touch transport (prev / play-pause / next), seek bar,
   built-in 10-band EQ presets, mono, shuffle/repeat, volume,
-  queue and playlist manager, and **34 real-time visualizer modes** — tap the
+  queue and playlist manager under **MORE → Queue**, and **34 real-time visualizer modes** — tap the
   visualizer to cycle modes.
 - **v2.4 updates** — YinYang and Ethereal visualizers, previous EQ preset,
   playlist reversal, current-track Navidrome ratings, radio channel song lists
