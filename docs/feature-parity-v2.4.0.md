@@ -157,7 +157,7 @@ Native references: [playlists](https://github.com/bjarneo/cliamp/blob/v2.4.0/doc
 | Saved playlists / create / rename / sort / multi-select / search | Partial | Named playlists can be created, renamed, played and deleted; stored locally. No sort, multi-select or search. |
 | History | Partial | 200 entries; browser records at 50% and deduplicates only consecutive repeats within five minutes. Native records at track start and deduplicates by path globally. Live/unknown-duration tracks are excluded here; decoded duration is not propagated into stored track metadata. |
 | Track favorites | Partial | localStorage list and playable rows; no Navidrome/Spotify favorite synchronization. Distinct from the separate radio URL list. |
-| Built-in visualizer names | Implemented | All 34 native names plus None in native order; registry and rendering tests. Numeric preferences migrate to names. |
+| Built-in visualizer names | Implemented | All 34 native names plus None in native order. Tapping the current name opens a themed grid in main/immersive playback; all choices fit the Tesla viewport, with scrolling on narrow screens. Selection persists by name, and canvas tap/Enter/Space still cycle. Picker focus, dismissal, audio continuity, themes and viewport checks pass. Renderer algorithms are unchanged; numeric preferences still migrate to names. |
 | Visualizer fidelity / analysis | Partial | Character-grid adaptations, not verified pixel/algorithm parity. Stereo meters simulate L/R from a mono tap; FFT uses ten bands even for modes whose native drivers request more. YinYang uses Braille and simplified path motion. |
 | Visualizer picker / fullscreen / low power | Partial | The deployed immersive visualizer and its touch controls are preserved, with enter/exit browser checks. No direct mode picker, low-power preference or background playback guarantee. |
 | Bundled themes | Implemented | All 22 vendored TOMLs match tagged native theme files byte-for-byte. Settings → Appearance has a named picker and palette preview, reachable directly from Now Playing. Selection applies immediately and persists. Browser checks cover all options, light/dark palettes, persistence and continued playback. User theme import is absent. |
@@ -199,13 +199,12 @@ Full-session restore is implemented and covered by regression checks. Next:
 
 Spoken transport controls are also implemented and verified with synthetic media.
 
-1. **Pick visualizers by name.** A popup avoids cycling through 34 modes to
-   reach a favorite. All 34 modes are already present; rendering cleanup is a
-   separate deferred task. Native cliamp also has a visualizer picker.
-2. **Collect latest/unplayed episodes from saved shows.** Build a convenient
+Named visualizer selection is implemented; rendering cleanup remains deferred.
+
+1. **Collect latest/unplayed episodes from saved shows.** Build a convenient
    departure queue from existing subscriptions, progress and played markers.
    This is a browser convenience built on existing functionality.
-3. **Add station and podcast-feed URLs directly.** Allow sources missing from
+2. **Add station and podcast-feed URLs directly.** Allow sources missing from
    search to be saved and reused through the existing favorites UI.
 
 Real-account Plex and browser-only Qobuz validation remain separate provider
@@ -232,6 +231,7 @@ omabox up --new --size 1024x768 --net isolated --allow 4173,4174 --no-shell
 omabox -b NAME run -- node "$PWD/tests/browser-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/session-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/spoken-smoke.mjs"
+omabox -b NAME run -- node "$PWD/tests/visualizer-picker-smoke.mjs"
 omabox -b NAME down
 ```
 
