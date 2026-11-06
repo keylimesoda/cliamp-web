@@ -1298,3 +1298,16 @@ select {
 .playlist-name-form input { min-height: var(--tap-min); min-width: 0; flex: 1; background: var(--bg-sunken); color: var(--text); border: 1px solid var(--border); font: inherit; padding: 0.4rem; }
 .recovery-controls { flex-wrap: nowrap; justify-content: space-between; }
 .recovery-controls > span { overflow: hidden; text-overflow: ellipsis; }
+
+/* Touch equivalents of native subscription actions l / L. */
+.subscriptions-panel { max-height: 50%; overflow-y: auto; flex-shrink: 1; }
+.subscriptions-header { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); flex-wrap: wrap; }
+.subscription-list, .subscription-row { flex-shrink: 0; }
+.subscription-row { display: grid; grid-template-columns: minmax(0, 1fr) auto var(--tap-min); gap: var(--gap-sm); padding-inline: 0; cursor: default; }
+.subscription-open { display: flex; align-items: center; min-width: 0; text-align: left; background: transparent; border-color: transparent; box-shadow: none; }
+.subscription-open .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subscription-remove { width: var(--tap-min); padding-inline: 0; color: var(--favorite); }
+@media (max-width: 560px) {
+  .subscription-row { grid-template-columns: minmax(0, 1fr) var(--tap-min); }
+  .subscription-open { grid-column: 1 / -1; }
+}

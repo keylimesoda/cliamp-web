@@ -119,7 +119,7 @@ Browser evidence: `src/providers/`, `src/components/*Browser.tsx`,
 | Station-provided advertising | Different | On MoE Lofi's Zeno stream, controlled captures show that changing only the User-Agent changes the first ~30 seconds of audio. Chromium does not accept the native player's User-Agent override from page JavaScript. See the [MoE investigation](moe-lofi-ads.md); identical station URLs do not guarantee identical ad delivery. |
 | Custom stations / direct URL / M3U / PLS | Missing | Engine accepts URLs internally but there is no URL/add-station form, playlist parser/import/export or native saved-station format. |
 | Podcast chart/search/categories/RSS/subscriptions | Partial | Apple chart/search, 19 categories and RSS enclosures; saved subscriptions. Chart country fixed to US. Search is per keystroke, not submit-only. Direct feed-URL input and Atom episode extraction are absent. CORS can block publisher feeds. |
-| Podcast progress / played state / latest from subscriptions | Partial | GUID/enclosure-based local progress, ambiguity-safe metadata migration, five-second rewind, first-15-second restart, completion/played markers and resume labels are implemented. No enqueue-latest or batch subscription actions; CORS can block publisher feeds. RSS duration parsing includes the deployed branch’s `HH:MM:SS` fix. |
+| Podcast progress / played state / latest from subscriptions | Partial | GUID/enclosure-based local progress, ambiguity-safe metadata migration, five-second rewind, first-15-second restart, completion/played markers and resume labels are implemented. Native `l`/`L` latest actions are implemented in Podcasts/FAVS: single latest appends and queues after existing entries; all-show latest appends without queueing. Date-only comparison/feed-order fallback, six-worker fetch limit, subscription order, duplicates/played episodes, partial errors and no-autoplay behavior match native. Remaining subscription append-all/play/queue-all actions are absent; CORS can block publisher feeds. RSS duration parsing includes the deployed branch’s `HH:MM:SS` fix. |
 | Local files/folders / tags / embedded lyrics | Missing | “Local” means history/favorites only. No File API picker, directory import, file tags or embedded lyrics. User-mediated file import is feasible in a static app. |
 | Navidrome artists/albums/search | Partial | Real Subsonic envelope/nesting corrected; fixture-tested. No real authenticated server test. No UI pagination/sort chooser, saved-playlist browse, server favorite sync, playback reporting, provider lyrics or transcoding preferences. |
 | Navidrome ratings | Partial | Current-track rating works against fixture requests; selected nonplaying tracks and library-wide cached rating refresh are not implemented. |
@@ -201,10 +201,10 @@ Spoken transport controls are also implemented and verified with synthetic media
 
 The named visualizer picker was removed after user testing; rendering cleanup remains deferred.
 
-1. **Collect latest/unplayed episodes from saved shows.** Build a convenient
-   departure queue from existing subscriptions, progress and played markers.
-   This is a browser convenience built on existing functionality.
-2. **Add station and podcast-feed URLs directly.** Allow sources missing from
+Native subscription latest actions (`l`/`L`) are implemented and fixture-tested.
+There is no added unplayed filter or combined episode inbox.
+
+1. **Add station and podcast-feed URLs directly.** Allow sources missing from
    search to be saved and reused through the existing favorites UI.
 
 Real-account Plex and browser-only Qobuz validation remain separate provider
@@ -232,6 +232,7 @@ omabox -b NAME run -- node "$PWD/tests/browser-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/session-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/spoken-smoke.mjs"
 omabox -b NAME run -- node "$PWD/tests/visualizer-controls-smoke.mjs"
+omabox -b NAME run -- node "$PWD/tests/podcast-latest-smoke.mjs"
 omabox -b NAME down
 ```
 

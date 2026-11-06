@@ -243,6 +243,8 @@ export interface PlayerState {
   playTrack: (track: Track, startAtSec?: number) => Promise<void>;
   retry: () => Promise<void>;
   enqueueTrack: (track: Track) => Promise<void>;
+  /** Append as given; optional queueing goes after existing queue entries. No autoplay. */
+  appendTracks: (tracks: Track[], queue?: boolean) => Promise<void>;
   queueRemove: (index: number) => void;
   queueMove: (from: number, to: number) => void;
   queueClear: () => void;
@@ -774,6 +776,15 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     playlist?.queueToggle(displayPos);
     syncPlaylistUI();
     void armNextGapless();
+  },
+  async appendTracks(tracks, queue = false) {
+    if (!tracks.length) return;
+    if (!get().booted) await get().boot();
+    const pl = playlist!;
+    const start = pl.add(tracks);
+    if (queue) tracks.forEach((_, i) => pl.queueToggle(pl.displayAt(start + i)));
+    if (!get().track) set({ track: pl.currentTrack ?? null });
+    syncPlaylistUI(); void armNextGapless();
   },
   async enqueueTrack(track) {
     if (!get().booted) await get().boot();
