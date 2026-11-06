@@ -61,7 +61,7 @@ export const useServers = create<ServersStore>()((set, get) => ({
     const c = get().servers[id];
     if (!c || !c.url.trim()) return false;
     if (!needsCreds) return true;
-    // Navidrome needs user+password; others accept token or user+password.
+    if (id === "navidrome") return Boolean(c.user?.trim() && c.password);
     return Boolean(c.token?.trim() || (c.user?.trim() && c.password?.trim()));
   },
   saveConfig(id, cfg) {

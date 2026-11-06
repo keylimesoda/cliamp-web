@@ -98,6 +98,12 @@ Browser evidence: `src/core/audio/engine.ts`, `wsola.test.ts`,
 
 ## Sources and provider behavior
 
+The Servers screen now exposes only Navidrome and Audiobookshelf. Connect
+validates authentication before saving credentials. Plex, Jellyfin, Emby and
+Lyrion are hidden; their remaining source-level findings below do not imply
+that they are offered as working integrations. See the
+[server sign-in audit](server-auth-audit.md) for decisions and fixture evidence.
+
 Native inventory: [README](https://github.com/bjarneo/cliamp/blob/v2.4.0/README.md),
 [`external/`](https://github.com/bjarneo/cliamp/tree/v2.4.0/external),
 [`internal/subsonicapi/`](https://github.com/bjarneo/cliamp/tree/v2.4.0/internal/subsonicapi),
@@ -120,7 +126,7 @@ Browser evidence: `src/providers/`, `src/components/*Browser.tsx`,
 | Jellyfin / Emby | Broken | Client exists, but login expects `SessionToken`; native fixture/API response contains `AccessToken`. Query keys use `Recursive.True` and `Album` rather than native `Recursive` / `MusicAlbum`; server routes/auth/cache behavior need a real contract pass. No playback reports or server resume. |
 | Audiobookshelf | Partial | Token or username/password login, native-shaped library/list/item responses, multi-file books and podcast episodes are wired to the browser. Per-file resume is local; no server-side progress sync or live server validation. Search expands results to playable tracks. |
 | Lyrion/LMS | Broken | Sends a command string in `slim.request` instead of the command token array; reads `artists`/`albums`/`tracks` instead of `*_loop`. Generic browser requires credentials although URL-only is valid. Authenticated media URLs and plugin-track filtering need adaptation. |
-| Server setup | Partial | URL/user/password and an API token field are available. No connection test, edit/remove flow once configured, auth refresh policy or config import/export. |
+| Server setup | Partial | Navidrome and Audiobookshelf have verified Connect flows and credential editing; ABS also accepts a validated API token. Providers without completed sign-in are hidden. No remove flow, external SSO, config import/export or comprehensive auth-refresh policy. |
 | Spotify | Missing / Native | No Spotify client, sign-in, librespot playback or related-track discovery. Needs a separate browser-compatible playback/auth design or companion. |
 | YouTube / YouTube Music / Bilibili / Xiaoyuzhou | Missing / Native | No search, extractor, cookies or playback adapter. Existing direct-audio URLs are not equivalent to these providers. |
 | SoundCloud / Mixcloud / NetEase / Yandex Music | Missing / Native | No account/catalog/resolver integration. Native uses API/cookies and/or yt-dlp not present here. |

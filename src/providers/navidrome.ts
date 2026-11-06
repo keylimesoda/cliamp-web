@@ -9,7 +9,7 @@
  */
 import { md5Hex } from "../core/md5";
 import type { Provider, ResolvedSource, Track } from "../core/types";
-import { useServers } from "../store/servers";
+import { useServers, type ServerConfig } from "../store/servers";
 import { registerProvider } from "./registry";
 
 const VERSION = "1.16.1";
@@ -33,15 +33,20 @@ interface SubsonicEnvelope<T> {
   "subsonic-response": T & { status: "ok" | "failed"; error?: { code: number; message: string } };
 }
 
-async function subsonic<T>(base: string, user: string, password: string, path: string, params: Record<string, string | number> = {}): Promise<T> {
+async function subsonic<T>(base: string, user: string, password: string, path: string, params: Record<string, string | number> = {}, signal?: AbortSignal): Promise<T> {
   const q = authParams(user, password);
   for (const [k, v] of Object.entries(params)) q.set(k, String(v));
-  const res = await fetch(`${base.replace(/\/$/, "")}/rest/${path}?${q.toString()}`);
+  const res = await fetch(`${base.replace(/\/$/, "")}/rest/${path}?${q.toString()}`, { signal });
   if (!res.ok) throw new Error(`navidrome ${res.status}`);
   const data = (await res.json()) as SubsonicEnvelope<T>;
   const response = data["subsonic-response"];
   if (response?.status !== "ok") throw new Error(response?.error?.message ?? "navidrome error");
   return response;
+}
+
+export async function verifyNavidromeConfig(c: ServerConfig): Promise<void> {
+  if (!c.user?.trim() || !c.password) throw new Error("Enter your Navidrome username and password");
+  await subsonic(c.url, c.user, c.password, "ping", {}, AbortSignal.timeout(15000));
 }
 
 function cfg() {

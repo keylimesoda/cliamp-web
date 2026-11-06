@@ -15,18 +15,31 @@ function cfg(): ServerConfig {
   if (!c?.url.trim()) throw new Error("Configure Audiobookshelf first");
   return c;
 }
-async function auth(): Promise<{ base: string; token: string }> {
-  const c = cfg(), base = c.url.replace(/\/$/, "");
+async function login(c: ServerConfig): Promise<{ base: string; token: string }> {
+  const base = c.url.replace(/\/$/, "");
   if (c.token?.trim()) return { base, token: c.token.trim() };
-  if (cached?.config === c) return { base, token: cached.token };
   if (!c.user || !c.password) throw new Error("Audiobookshelf needs a token or username/password");
-  const res = await fetch(`${base}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: c.user, password: c.password }) });
+  const res = await fetch(`${base}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: c.user, password: c.password }), signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`Audiobookshelf login ${res.status}`);
   const data = await res.json() as { user?: { token?: string }; accessToken?: string };
   const token = data.user?.token || data.accessToken;
   if (!token) throw new Error("Audiobookshelf login returned no token");
+  return { base, token };
+}
+async function auth(): Promise<{ base: string; token: string }> {
+  const c = cfg();
+  if (cached?.config === c) return { base: c.url.replace(/\/$/, ""), token: cached.token };
+  const { base, token } = await login(c);
   if (cfg() !== c) throw new Error("Audiobookshelf configuration changed");
   cached = { config: c, token }; return { base, token };
+}
+
+export async function verifyAudiobookshelfConfig(c: ServerConfig): Promise<void> {
+  const { base, token } = await login(c);
+  const res = await fetch(`${base}/api/libraries`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`Audiobookshelf ${res.status}`);
+  const data = await res.json() as { libraries?: unknown };
+  if (!Array.isArray(data.libraries)) throw new Error("Audiobookshelf returned an invalid library response");
 }
 async function get<T>(path: string): Promise<T> {
   const { base, token } = await auth();
