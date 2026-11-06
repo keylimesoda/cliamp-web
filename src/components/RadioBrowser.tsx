@@ -65,6 +65,7 @@ export default function RadioBrowser() {
   const favorites = useFavoritesStore();
   const [view, setView] = useState<View>({ kind: "home" });
   const [query, setQuery] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
   const [countryName, setCountryName] = useState("");
   const [order, setOrder] = useState<RadioOrder>("votes");
   const [channelBusy, setChannelBusy] = useState<string | null>(null);
@@ -124,8 +125,8 @@ export default function RadioBrowser() {
     view.kind === "country" ? "country:" + view.code + order : "",
   );
   const tags = useAsync<RadioTag[]>(
-    () => (view.kind === "tags" ? radioBrowse.listTags() : Promise.resolve([])),
-    view.kind === "tags" ? "tags" : "",
+    () => (view.kind === "tags" || view.kind === "tag" ? radioBrowse.listTags() : Promise.resolve([])),
+    view.kind === "tags" || view.kind === "tag" ? "tags" : "",
   );
   const tagStations = useAsync<Track[]>(
     () =>
@@ -140,7 +141,11 @@ export default function RadioBrowser() {
     view.kind === "search" ? "search:" + view.query : "",
   );
 
-  const back = () => setView({ kind: "home" });
+  const back = () => {
+    if (view.kind === "tag") setView({ kind: "tags" });
+    else { setQuery(""); setView({ kind: "home" }); }
+  };
+  const filteredTags = (tags.data ?? []).filter((tag) => tag.name.toLowerCase().includes(tagQuery.trim().toLowerCase()));
 
   const search = (q: string) => {
     setQuery(q);
@@ -195,9 +200,10 @@ export default function RadioBrowser() {
 
       <input
         type="search"
-        value={query}
-        placeholder="Search stations…"
-        onChange={(e) => search(e.target.value)}
+        value={view.kind === "tags" ? tagQuery : query}
+        aria-label={view.kind === "tags" ? "Filter genres & tags" : "Search stations"}
+        placeholder={view.kind === "tags" ? "Filter genres & tags…" : "Search stations…"}
+        onChange={(e) => view.kind === "tags" ? setTagQuery(e.target.value) : search(e.target.value)}
         style={{
           width: "100%",
           minHeight: "var(--tap-min)",
@@ -211,6 +217,7 @@ export default function RadioBrowser() {
         }}
       />
 
+      {view.kind === "tags" && tags.error ? <div className="status-row is-error">ERR: {tags.error}</div> : null}
       {stationError ? <div className="status-row is-error">ERR: {stationError}</div> : null}
       {channelError ? <div className="status-row is-error">ERR: {channelError}</div> : null}
       {channelBusy ? <div className="status-row" role="status">Loading channel…</div> : null}
@@ -232,7 +239,7 @@ export default function RadioBrowser() {
               <Row
                 label="Browse genres & tags"
                 hint={tags.data ? `${tags.data.length}` : undefined}
-                onClick={() => setView({ kind: "tags" })}
+                onClick={() => { setTagQuery(""); setView({ kind: "tags" }); }}
               />
             </div>
           </div>
@@ -307,8 +314,9 @@ export default function RadioBrowser() {
         <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
           <div className="list">
             {tags.busy ? <Row label="loading tags…" /> : null}
-            {(tags.data ?? []).slice(0, 300).map((t) => (
-              <div className="row" key={t.name} onClick={() => setView({ kind: "tag", name: t.name })} role="button" aria-label={t.name}>
+            {!tags.busy && tags.data && !filteredTags.length ? <Row label={tagQuery.trim() ? "no matching tags" : "no tags"} /> : null}
+            {filteredTags.map((t) => (
+              <div className="row" key={t.name} onClick={() => { setQuery(""); setView({ kind: "tag", name: t.name }); }} role="button" aria-label={t.name}>
                 <span className="marker" aria-hidden>#</span>
                 <span className="title">{t.name}</span>
                 <span className="dur">{t.stationcount}</span>
