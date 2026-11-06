@@ -36,7 +36,7 @@ normal navigation until a session has been validated.
 - **Now Playing** — touch transport (prev / play-pause / next), seek bar,
   a 10-band EQ with touch sliders, a preset picker and a saved custom curve, mono, shuffle/repeat,
   queue and playlist manager under **MORE → Queue**, and **34 real-time visualizer modes** — tap the
-  visualizer to cycle modes.
+  canvas to cycle modes, or tap its name to choose directly.
 - **Player volume** — under **MORE → Playback options**, with a reset to
   0 dB. Main and full-screen playback leave listening volume to the car.
 - **Personal EQ** — open **MORE → EQ preset** to pick a curve. Drag an individual
@@ -85,8 +85,10 @@ normal navigation until a session has been validated.
 
 The 34 named visualizer modes from cliamp v2.4.0, adapted to a canvas
 character-grid renderer. Algorithms and analysis are not all identical to native
-cliamp (the Stereo meters use a mono tap). **Tap/click the visualizer to cycle** (the original's
-`v` key); the choice persists. Rendering runs at ~60 FPS while playing and
+cliamp (the Stereo meters use a mono tap). **Tap/click the canvas to cycle** (the original's
+`v` key), or tap the current name to open a picker with all 34 modes plus None.
+The picker works in main and immersive playback, highlights your current choice,
+and keeps audio running. The choice persists. Rendering runs at ~60 FPS while playing and
 throttles to ~5 FPS when idle.
 
 | | |

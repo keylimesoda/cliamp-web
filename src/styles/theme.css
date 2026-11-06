@@ -709,12 +709,51 @@ select {
   top: calc(var(--gap) / 2);
   right: calc(var(--gap) / 2);
   font-size: inherit;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap-min);
+  max-width: calc(100% - var(--gap));
+  letter-spacing: 0.02em;
+  color: var(--text);
   background: color-mix(in srgb, var(--bg-sunken) 82%, transparent);
-  padding: 0 0.25em;
-  pointer-events: none;
+  padding: 0 0.6em;
+  cursor: pointer;
 }
+.viz-name svg { flex-shrink: 0; }
+.visualizer:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.viz-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.visualizer-picker {
+  position: fixed;
+  width: min(760px, calc(100% - 24px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: var(--pad);
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius);
+}
+.visualizer-picker::backdrop { background: rgb(0 0 0 / 75%); }
+.visualizer-picker-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+  padding-bottom: var(--gap-sm);
+  background: var(--bg-sunken);
+}
+.visualizer-picker-header h2 { margin: 0; font-size: inherit; color: var(--text-accent); }
+.visualizer-picker-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--gap-sm); }
+.visualizer-picker-options button { min-width: 0; min-height: var(--tap-min); padding-inline: 0.4rem; }
+.visualizer-picker-options button[aria-pressed="true"] { color: var(--playing); border-color: var(--playing); background: var(--row-active); }
+@media (max-width: 740px) { .visualizer-picker-options { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .visualizer-picker-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* transport controls (the big in-car buttons) */
 .transport {
