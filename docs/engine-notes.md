@@ -37,6 +37,9 @@ and exposes a manual Retry after the bounded attempts. Stable playback resets
 the retry budget. Browser fixture coverage currently validates playback and
 queue interactions; retry timing, cancellation and exhaustion are covered by
 the `PlaybackRecovery` unit tests.
+An unchanged paused snapshot from delayed graph initialization does not count
+as a new user pause; a regression test verifies that it cannot cancel a retry
+after source resolution fails.
 
 Podcasts and Audiobookshelf files save their own progress in local browser
 storage. Resume rewinds five seconds, restarts items stopped in the first

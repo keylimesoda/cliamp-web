@@ -1,6 +1,6 @@
 # Server sign-in audit — November 5, 2026
 
-The Servers screen exposes Navidrome and Audiobookshelf. Connect validates
+The Servers screen exposes Navidrome, Audiobookshelf and Plex. Connect validates
 credentials with the server before persisting them or opening the library.
 Rejected connections keep the form open and preserve existing saved settings.
 Configured entries have an Edit action so credentials can be corrected.
@@ -9,7 +9,7 @@ Configured entries have an Edit action so credentials can be corrected.
 | --- | --- | --- |
 | Navidrome | Username/password generate salted Subsonic authentication parameters. Connect calls authenticated `rest/ping` and checks the Subsonic status envelope, including failures delivered with HTTP 200. Browse and stream requests carry fresh authentication. | Show. |
 | Audiobookshelf | Username/password call `POST /login`, reading `user.token` or `accessToken`; an API token is also accepted. Connect validates bearer access to `api/libraries`. Browsing authenticates requests; playback resolves a token-bearing file URL. | Show. |
-| Plex | Direct server API token access exists, with metadata fixtures. No Plex account sign-in, PIN authorization, or server discovery. The old generic username/password form could save unusable credentials. | Hide until account sign-in is implemented. |
+| Plex | Phone-code account linking, server discovery with server-scoped tokens, secure connection checks with relay fallback, and manual URL/token setup. Music libraries, albums and audio playlists are wired into playback. | Show. See [Plex setup and limits](plex.md). |
 | Jellyfin | Login reads `SessionToken`, although the API returns `AccessToken`. Browse query keys also mismatch the native contract. | Hide. |
 | Emby | Shares the broken Jellyfin login and browse client. | Hide. |
 | Lyrion/LMS | Optional Basic auth exists, but JSON-RPC sends command strings instead of token arrays and reads incorrect response keys. Authenticated media playback relies on URL userinfo. | Hide. |

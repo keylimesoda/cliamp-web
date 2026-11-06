@@ -41,9 +41,10 @@ The exact native release and commit are recorded in [upstream.json](upstream.jso
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
   - **Podcasts** — Apple top charts, search, RSS enclosures.
-  - **Self-hosted** — Navidrome (Subsonic) and Audiobookshelf, with credentials
-    verified before saving. Plex, Jellyfin, Emby and Lyrion are hidden until
-    their sign-in flows are implemented; see the [server sign-in audit](docs/server-auth-audit.md).
+  - **Self-hosted** — Navidrome (Subsonic), Audiobookshelf and [Plex](docs/plex.md),
+    with connections verified before saving. Plex supports phone-code account
+    linking, server discovery, music libraries, albums and audio playlists.
+    Jellyfin, Emby and Lyrion remain hidden; see the [server sign-in audit](docs/server-auth-audit.md).
 - **History & favorites** — recent plays (deduped) and a favorites list,
   persisted locally.
 - **Lyrics** — LRCLIB lookup and LRC parsing, synced to playback.

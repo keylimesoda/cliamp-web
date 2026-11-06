@@ -35,6 +35,18 @@ afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals()
 const end = (promoted: boolean, track?: Track) => (mod.getEngine() as unknown as { end: (p: boolean, t?: Track) => void }).end(promoted, track);
 
 describe("player transition guards", () => {
+  it("keeps recovery enabled when delayed audio initialization notifies an unchanged paused state", async () => {
+    let initialized!: () => void;
+    vi.spyOn(mod.getEngine()!, "init").mockImplementationOnce(() => new Promise((resolve) => { initialized = resolve; }));
+    mocks.resolve.mockRejectedValueOnce(new Error("Temporary network failure"));
+    await mod.usePlayerStore.getState().playTrack(tracks[0]);
+    expect(mod.usePlayerStore.getState().recovery?.attempt).toBe(1);
+    initialized();
+    (mod.getEngine() as unknown as { notify: () => void }).notify();
+    expect(mod.usePlayerStore.getState().recovery?.attempt).toBe(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mod.usePlayerStore.getState().state).toBe("playing");
+  });
   it("advances when a source ends without a decoded preload", async () => {
     await mod.usePlayerStore.getState().loadPlaylist(tracks);
     end(false); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();

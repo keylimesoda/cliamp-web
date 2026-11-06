@@ -41,6 +41,14 @@ describe("Navidrome wire protocol", () => {
   });
 });
 describe("Plex metadata", () => {
+  it("extracts the playable file from the API's Media array", async () => {
+    mockFetch.mockResolvedValueOnce(json({ MediaContainer: { Metadata: [{ ratingKey: "42", title: "Song", Media: [{ Part: [{ key: "/library/parts/42/file.mp3" }] }] }] } }))
+      .mockResolvedValueOnce(json({ MediaContainer: { Metadata: [] } }));
+    const [track] = await plexBrowse.albumTracks("album");
+    expect(track.providerMeta?.partKey).toBe("/library/parts/42/file.mp3");
+    await plexBrowse.sectionTracks("1");
+    expect(new URL(String(mockFetch.mock.calls[1][0])).searchParams.get("type")).toBe("10");
+  });
   it("reads the artist, album, and album year sent on playlist tracks", async () => {
     mockFetch.mockResolvedValue(json({ MediaContainer: { Metadata: [{ ratingKey: "42", title: "Song", grandparentTitle: "Artist", parentTitle: "Album", parentYear: 1979 }] } }));
     expect((await plexBrowse.playlistItems("1"))[0]).toMatchObject({ title: "Song", artist: "Artist", album: "Album", year: 1979 });

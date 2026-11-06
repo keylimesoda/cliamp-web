@@ -13,6 +13,11 @@ export interface ServerConfig {
   token?: string;
   /** Optional restriction (e.g. Plex/Audiobookshelf library names). */
   libraries?: string[];
+  /** Plex server identity and discovered secure endpoints for network changes. */
+  serverId?: string;
+  serverName?: string;
+  connectionUrls?: string[];
+  relayUrls?: string[];
 }
 
 const KEY = "cliamp-web:servers";
@@ -62,6 +67,7 @@ export const useServers = create<ServersStore>()((set, get) => ({
     if (!c || !c.url.trim()) return false;
     if (!needsCreds) return true;
     if (id === "navidrome") return Boolean(c.user?.trim() && c.password);
+    if (id === "plex") return Boolean(c.token?.trim());
     return Boolean(c.token?.trim() || (c.user?.trim() && c.password?.trim()));
   },
   saveConfig(id, cfg) {

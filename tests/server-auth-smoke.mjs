@@ -28,7 +28,8 @@ const servers = () => page.getByRole("button", { name: "Servers", exact: true })
 const button = (name) => page.getByRole("button", { name, exact: true });
 try {
   await page.goto(origin + "/cliamp-web/"); await servers();
-  for (const name of ["Plex", "Jellyfin", "Emby", "Lyrion (LMS)"]) await expect(button(name)).toHaveCount(0);
+  for (const name of ["Jellyfin", "Emby", "Lyrion (LMS)"]) await expect(button(name)).toHaveCount(0);
+  await expect(button("Plex")).toBeVisible();
   await expect(button("Navidrome")).toBeVisible(); await expect(button("Audiobookshelf")).toBeVisible();
   await button("Navidrome").tap();
   await page.getByLabel("Server URL", { exact: true }).fill(origin);

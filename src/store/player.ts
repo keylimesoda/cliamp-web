@@ -457,8 +457,11 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       },
       onError: connectionFailed,
     });
+    let previousEngineState: PlaybackState = "stopped";
     engine.subscribe((s) => {
-      if (s.state === "paused" && wantsPlayback && !transitioning) { wantsPlayback = false; recovery.stop(); saveProgress(); }
+      const becamePaused = s.state === "paused" && previousEngineState !== "paused";
+      previousEngineState = s.state;
+      if (becamePaused && wantsPlayback && !transitioning) { wantsPlayback = false; recovery.stop(); saveProgress(); }
       set({
         state: s.state,
         track: s.track ?? get().track,
