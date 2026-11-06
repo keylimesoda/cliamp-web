@@ -62,7 +62,13 @@ normal navigation until a session has been validated.
   live radio return to 1×. Skips stay within the current file and preserve pause.
 - **Music sources**
   - **Radio** — Radio Browser (countries, genres/tags) + built-in preset stations.
-  - **Podcasts** — Apple top charts, search, RSS enclosures.
+  - **Podcasts** — Apple top charts, search, RSS enclosures. Saved shows in
+    Podcasts and FAVS expose native subscription actions: **Queue latest** (`l`)
+    appends one show's newest episode to the playlist and the end of the queue;
+    **Add latest from all** (`L`) appends the newest episode from each subscribed
+    show in subscription order, without queueing. Both leave playback running or
+    paused as it was, and neither starts stopped playback. Publication dates
+    decide newest, with feed-order fallback; already-played episodes are included.
   - **Self-hosted** — Navidrome (Subsonic), Audiobookshelf and [Plex](docs/plex.md),
     with connections verified before saving. Plex supports phone-code account
     linking, server discovery, music libraries, albums and audio playlists.

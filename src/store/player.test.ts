@@ -255,3 +255,34 @@ describe("player transition guards", () => {
     expect(mod.getEngine()?.snapshot().track).toBeNull();
   });
 });
+
+
+describe("native subscription appends", () => {
+  it("appends latest after the existing FIFO queue, including repeated episode identities", async () => {
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks); s.queueToggle(2); s.seek(4); s.pause();
+    const load = vi.spyOn(mod.getEngine()!, "load");
+    await s.appendTracks([tracks[1]], true);
+    expect(load).not.toHaveBeenCalled();
+    expect(mod.usePlayerStore.getState()).toMatchObject({ state: "paused", position: 4, track: tracks[0], tracks: [...tracks, tracks[1]] });
+    expect(mod.getPlaylist()!.queueIndices()).toEqual([2, 3]);
+    await s.next(); expect(mod.usePlayerStore.getState().track).toEqual(tracks[2]);
+    await s.next(); expect(mod.usePlayerStore.getState().track).toEqual(tracks[1]);
+    await s.next(); expect(mod.usePlayerStore.getState().track).toEqual(tracks[1]); // returns to album cursor
+  });
+  it("appends the sweep without queueing or changing shuffled playback, position or modes", async () => {
+    const s = mod.usePlayerStore.getState(); await s.loadPlaylist(tracks); s.toggleShuffle(); s.cycleRepeat(); s.queueToggle(2); s.seek(3);
+    const queued = mod.getPlaylist()!.queueIndices();
+    const load = vi.spyOn(mod.getEngine()!, "load");
+    await s.appendTracks([{ path: "latest", title: "Latest" }, tracks[0]]);
+    expect(load).not.toHaveBeenCalled();
+    expect(mod.usePlayerStore.getState()).toMatchObject({ state: "playing", track: tracks[0], position: 3, shuffle: "on", repeat: "all", queueCount: 1 });
+    expect(mod.getPlaylist()!.queueIndices()).toEqual(queued);
+    expect(mod.getPlaylist()!.count).toBe(5);
+  });
+  it("does not autoplay an empty playlist; Play starts its first appended episode", async () => {
+    const s = mod.usePlayerStore.getState(); const load = vi.spyOn(mod.getEngine()!, "load");
+    await s.appendTracks(tracks);
+    expect(load).not.toHaveBeenCalled(); expect(mod.usePlayerStore.getState().state).toBe("stopped");
+    await s.play(); expect(mod.usePlayerStore.getState().track).toEqual(tracks[0]);
+  });
+});

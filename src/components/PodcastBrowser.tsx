@@ -1,3 +1,4 @@
+import SubscribedShows from "./SubscribedShows";
 import ProgressLabel from "./ProgressLabel";
 import { useState } from "react";
 import { APPLE_CATEGORIES, podcastBrowse, type PodcastShow } from "../providers/podcast";
@@ -61,7 +62,7 @@ export default function PodcastBrowser({ initialShow = null }: PodcastBrowserPro
               .lookupShow(view.show.collectionId)
               .then((s) => podcastBrowse.showEpisodes(s.feedUrl!, s.name, 300))
         : Promise.resolve([]),
-    view.kind === "show" ? "show:" + view.show.collectionId : "",
+    view.kind === "show" ? "show:" + (view.show.feedUrl || view.show.collectionId) : "",
   );
 
   const back = () => setView({ kind: "home" });
@@ -142,27 +143,8 @@ export default function PodcastBrowser({ initialShow = null }: PodcastBrowserPro
       {view.kind === "home" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", flex: 1, minHeight: 0 }}>
           {prefs.subs.length > 0 && (
-            <div className="panel" style={{ padding: "0.4rem" }}>
-              <div className="list">
-                {prefs.subs.map((s) => (
-                  <div className="row" key={s.feedUrl} onClick={() => openShow({ collectionId: s.collectionId ?? 0, name: s.name, feedUrl: s.feedUrl, artworkUrl: s.artworkUrl })} role="button" aria-label={s.name}>
-                    <span className="marker" aria-hidden>▸</span>
-                    <span className="title">{s.name}</span>
-                    <span className="dur">sub</span>
-                    <span
-                      className="save-toggle is-fav"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        prefs.toggleSub(s);
-                      }}
-                      role="button"
-                      aria-label="Unsubscribe"
-                    >
-                      ♥
-                    </span>
-                  </div>
-                ))}
-              </div>
+            <div className="panel subscriptions-panel" style={{ padding: "0.4rem" }}>
+              <SubscribedShows onOpenShow={(s) => openShow({ ...s, collectionId: s.collectionId ?? 0 })} />
             </div>
           )}
           <div className="panel" style={{ padding: "0.4rem" }}>
