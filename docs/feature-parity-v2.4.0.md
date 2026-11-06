@@ -24,7 +24,7 @@ and immersive mode must not be treated as new missing work.
 - Compared the tagged native source, documentation and provider test fixtures
   against actual browser code, UI wiring and tests. The historical JSON reports
   in `docs/recon/` describe the original investigation, not verified coverage.
-- Runtime evidence: 111 automated unit/regression tests, TypeScript checking,
+- Runtime evidence: 124 automated unit/regression tests, TypeScript checking,
   production build, and Chromium fixture tests at 804×638 CSS pixels, touch
   enabled, DPR 1.96. Browser tests ran inside an isolated omabox box
   (Omarchy 4.5.0-3, virtual desktop 1024×768, no shell); fictional stations,
@@ -130,7 +130,8 @@ Browser evidence: `src/providers/`, `src/components/*Browser.tsx`,
 | Spotify | Missing / Native | No Spotify client, sign-in, librespot playback or related-track discovery. Needs a separate browser-compatible playback/auth design or companion. |
 | YouTube / YouTube Music / Bilibili / Xiaoyuzhou | Missing / Native | No search, extractor, cookies or playback adapter. Existing direct-audio URLs are not equivalent to these providers. |
 | SoundCloud / Mixcloud / NetEase / Yandex Music | Missing / Native | No account/catalog/resolver integration. Native uses API/cookies and/or yt-dlp not present here. |
-| Qobuz / Tidal | Missing / Native | No client, sign-in or playback integration. Browser auth/CORS/streaming support must be designed, not inferred impossible merely because OAuth is involved. |
+| Qobuz | Experimental | Opt-in browser-only OAuth/API client, playlists/favorites/search, signed MP3/FLAC resolution and quality controls have unit/touch fixtures. Reuses public web-player application material as native does. Real-account hosted callback and playback remain unverified; hidden from ordinary navigation. See [test evidence and limits](qobuz-browser-test.md). |
+| Tidal | Missing | No client, sign-in or playback integration. Tesla's native app makes this lower priority for the current use case. |
 | Bandcamp purchases / Telegram | Missing / Native | v2.4 additions have no browser counterparts; purchased library/auth/download/session handling absent. |
 | SSH sources, downloads, native credentials/proxy tools | Native | No SSH, filesystem downloading, system credentials or native network configuration. |
 
