@@ -37,18 +37,31 @@ try {
   const checkPosition = async () => {
     const v = await canvas.boundingBox(), b = await full.boundingBox();
     expect(b.width).toBeGreaterThanOrEqual(56); expect(b.height).toBeGreaterThanOrEqual(56);
-    expect(b.x).toBeGreaterThan(v.x + v.width / 2);
+    expect(b.x).toBeGreaterThanOrEqual(v.x);
+    expect(b.x + b.width).toBeLessThan(v.x + v.width / 2);
     expect(b.x + b.width).toBeLessThanOrEqual(v.x + v.width);
     expect(b.y).toBeGreaterThanOrEqual(v.y);
     expect(b.y + b.height).toBeLessThanOrEqual(v.y + v.height);
   };
+  const checkClose = async (suffix) => {
+    await button("MORE").tap();
+    const close = button("Close playback options"), header = page.locator(".advanced-header");
+    await expect(close).toBeInViewport();
+    const c = await close.boundingBox(), h = await header.boundingBox();
+    expect(c.width).toBeGreaterThanOrEqual(56); expect(c.height).toBeGreaterThanOrEqual(56);
+    expect(c.x).toBeGreaterThanOrEqual(h.x); expect(c.x + c.width).toBeLessThan(h.x + h.width / 2);
+    expect(await header.locator(":scope > :first-child").getAttribute("aria-label")).toBe("Close playback options");
+    await page.screenshot({ path: process.env.HOME + "/cliamp-viz-controls-evidence/driver-controls-" + suffix + ".png" });
+    await close.tap(); await expect(close).not.toBeVisible();
+  };
   await checkPosition(); await expectMode("Bars");
   const screenshotDir = process.env.HOME + "/cliamp-viz-controls-evidence"; await mkdir(screenshotDir, { recursive: true });
   await page.screenshot({ path: screenshotDir + "/visualizer-controls-804x638.png" });
+  await checkClose("804x638");
   await full.tap(); await expect(page.locator(".immersive-app")).toBeVisible();
   await expectMode("Bars"); await expect(full).toHaveCount(0);
   await expect(page.locator(".viz-name, .visualizer-picker")).toHaveCount(0);
-  await canvas.tap({ position: { x: 20, y: 30 } }); await expectMode("BarsDot");
+  await canvas.tap({ position: { x: 130, y: 30 } }); await expectMode("BarsDot");
   await canvas.press("Enter"); await expectMode("Rain");
   await canvas.press("Space"); await expectMode("BarsOutline");
   await button("Exit immersive visualizer").tap(); await expectMode("BarsOutline");
@@ -58,9 +71,10 @@ try {
   await full.focus(); await full.press("Enter");
   await expect(page.locator(".immersive-app")).toBeVisible(); await expectMode("BarsOutline");
   await button("Exit immersive visualizer").tap();
-  await canvas.tap({ position: { x: 20, y: 30 } }); await expectMode("Bricks");
+  await canvas.tap({ position: { x: 130, y: 30 } }); await expectMode("Bricks");
   await page.reload(); await expectMode("Bricks");
   await page.setViewportSize({ width: 360, height: 740 }); await checkPosition();
+  await checkClose("360x740");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await full.tap(); await expect(page.locator(".immersive-app")).toBeVisible();
   await button("Exit immersive visualizer").tap();
@@ -69,6 +83,7 @@ try {
   await button("Settings").tap(); await page.getByRole("combobox", { name: "Theme", exact: true }).selectOption("catppuccin-latte");
   await button("Now Playing").tap(); await checkPosition();
   await page.screenshot({ path: screenshotDir + "/visualizer-controls-light-804x638.png" });
+  await checkClose("light-804x638");
   expect(errors).toEqual([]);
-  console.log(JSON.stringify({ passed: true, checks: ["no named picker", "V positioned inside visualizer with 56px touch target", "V opens immersive without cycling", "audio continues without reloading", "canvas tap/keyboard cycling in both views", "choice persists", "mobile and light theme"], screenshots: screenshotDir }));
+  console.log(JSON.stringify({ passed: true, checks: ["no named picker", "V on upper-left with 56px touch target", "Close on left with matching DOM/focus order", "V opens immersive without cycling", "audio continues without reloading", "canvas tap/keyboard cycling in both views", "choice persists", "mobile and light theme"], screenshots: screenshotDir }));
 } finally { await context.close(); await browser.close(); }

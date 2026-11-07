@@ -707,7 +707,7 @@ select {
 .viz-wrap > .viz-full-toggle {
   position: absolute;
   top: calc(var(--gap) / 2);
-  right: calc(var(--gap) / 2);
+  left: calc(var(--gap) / 2);
 }
 .visualizer:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 .viz-full-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
@@ -935,7 +935,7 @@ select {
     z-index: 1;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: var(--gap);
     min-height: var(--tap-min);
     padding-bottom: var(--gap-sm);

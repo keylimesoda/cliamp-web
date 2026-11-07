@@ -95,7 +95,7 @@ normal navigation until a session has been validated.
 The 34 named visualizer modes from cliamp v2.4.0, adapted to a canvas
 character-grid renderer. Algorithms and analysis are not all identical to native
 cliamp (the Stereo meters use a mono tap). **Tap/click the canvas to cycle** (the original's
-`v` key), including None. Tap **V** in the upper-right corner of the visualization
+`v` key), including None. Tap **V** in the upper-left corner of the visualization
 to open the full visualizer. Cycling works in both views and the choice persists.
 Rendering runs at ~60 FPS while playing and
 throttles to ~5 FPS when idle.
