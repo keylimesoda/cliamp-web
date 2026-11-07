@@ -56,8 +56,9 @@ function Row({ label, hint, onClick }: { label: string; hint?: string; onClick?:
 /**
  * Radio source picker — built-in channels, station search, and the
  * Radio Browser directory (country + genre/tag browse). Tapping a station
- * loads it into the playback playlist and plays. Countries can be pinned
- * (persisted) for quick access; stations can be favorited.
+ * loads the displayed station results as the playback playlist and plays that
+ * station. Countries can be pinned (persisted) for quick access; stations can
+ * be favorited.
  */
 export default function RadioBrowser() {
   const playTrack = usePlayerStore((s) => s.playTrack);
@@ -94,8 +95,13 @@ export default function RadioBrowser() {
     } finally { if (request === channelRequest.current) setChannelBusy(null); }
   };
 
-  const play = (t: Track) => {
-    void playTrack(t, 0);
+  const play = (t: Track, results?: Track[]) => {
+    // A late song-channel request must not replace a newer station selection.
+    channelRequest.current++;
+    setChannelBusy(null);
+    setChannelError(null);
+    if (results) void usePlayerStore.getState().loadPlaylist(results, results.indexOf(t), true);
+    else void playTrack(t, 0);
   };
 
   const isStationFavorite = (t: Track) =>
@@ -331,7 +337,7 @@ export default function RadioBrowser() {
           <div className="list">
             {stationBusy ? <Row label="loading stations…" /> : null}
             {stationList.map((t) => (
-              <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
+              <div className="row" key={t.path} onClick={() => play(t, stationList)} role="button" aria-label={t.title}>
                 <span className="marker" aria-hidden>♫</span>
                 <span className="title">{t.title}</span>
                 <span className="dur">{(t.providerMeta?.countrycode as string) ?? t.genre ?? "LIVE"}</span>

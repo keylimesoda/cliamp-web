@@ -65,6 +65,11 @@ normal navigation until a session has been validated.
     Open **Browse genres & tags**, type **lofi** to filter the complete tag list,
     select the tag, then choose **Most Voted** (or another directory order).
     Tag filtering stays in the tag list; Back from stations restores your filter.
+    Tap a station in tag, country or name-search results to load that result list
+    into Now Playing at the selected station. **Previous/Next** scan the list in
+    both normal and full-screen playback; the list and selection survive reload.
+    Browsing and sorting alone keep the current playback and playlist. Existing
+    shuffle/repeat modes apply to the new list.
   - **Podcasts** — Apple top charts, search, RSS enclosures. Saved shows in
     Podcasts and FAVS expose native subscription actions: **Queue latest** (`l`)
     appends one show's newest episode to the playlist and the end of the queue;
