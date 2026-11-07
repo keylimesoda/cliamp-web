@@ -5,17 +5,23 @@ import NavidromeBrowser from "./NavidromeBrowser";
 import ServerBrowser from "./ServerBrowser";
 import PlexSetup from "./PlexSetup";
 import PlexBrowser from "./PlexBrowser";
+import QobuzScreen from "./QobuzScreen";
+import { hasQobuzCallback, qobuzTestEnabled } from "../providers/qobuzAuth";
+import { useQobuz } from "../store/qobuz";
 import "../providers/navidrome"; // registers the provider (side-effect)
 
 /** Show only servers with implemented authentication; verify before saving. */
 export default function ServersScreen() {
   const servers = useServers();
+  const qobuzSession = useQobuz((s) => s.session);
+  const [qobuzVisible, setQobuzVisible] = useState(hasQobuzCallback);
   const [editing, setEditing] = useState<AvailableServerId | null>(null);
   const [browse, setBrowse] = useState<AvailableServerId | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<ServerConfig>({ url: "", user: "", password: "" });
 
+  if (qobuzVisible) return <QobuzScreen onBack={() => setQobuzVisible(false)} />;
   if (browse) return browse === "navidrome" ? <NavidromeBrowser /> : browse === "plex" ? <PlexBrowser onBack={() => setBrowse(null)} /> : <ServerBrowser id={browse} />;
   if (editing === "plex") return <PlexSetup initial={servers.getConfig("plex")} onCancel={() => setEditing(null)} onConnected={(config) => {
     servers.saveConfig("plex", config); setEditing(null); setBrowse("plex");
@@ -108,6 +114,7 @@ export default function ServersScreen() {
                 </div>
               );
             })}
+            {(qobuzTestEnabled() || qobuzSession) && <button className="row" aria-label="Qobuz browser test" onClick={() => setQobuzVisible(true)}>Qobuz {qobuzSession ? "connected" : "— browser test"}</button>}
           </div>
         </div>
       )}

@@ -15,6 +15,11 @@ complete port. See the [feature parity audit](docs/feature-parity-v2.4.0.md) for
 implemented behavior, broken provider contracts, missing features and evidence.
 The exact native release and commit are recorded in [upstream.json](upstream.json).
 
+An [opt-in Qobuz browser-only experiment](docs/qobuz-browser-test.md) is in
+progress. It reuses native cliamp's public web-client bootstrap method, but
+real-account authorization and playback remain unverified. It is hidden from
+normal navigation until a session has been validated.
+
 **Live: [keylimesoda.github.io/cliamp-web](https://keylimesoda.github.io/cliamp-web/)**
 
 ![Now playing](docs/screenshots/now-playing.png)

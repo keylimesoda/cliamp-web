@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "build:qobuz-test": "node scripts/qobuz-bootstrap.mjs && npm run build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

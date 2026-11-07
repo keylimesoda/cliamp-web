@@ -14,6 +14,11 @@ on:
       - "vite.config.ts"
       - ".github/workflows/deploy-tesla-preview.yml"
   workflow_dispatch:
+    inputs:
+      qobuz_test:
+        description: Include the opt-in browser-only Qobuz bootstrap
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -44,6 +49,12 @@ jobs:
 
       - name: Build production app
         run: npm run build
+
+      - name: Include public Qobuz browser-test bootstrap
+        if: inputs.qobuz_test == true
+        run: |
+          node scripts/qobuz-bootstrap.mjs
+          cp public/qobuz-bootstrap.json dist/qobuz-bootstrap.json
 
       - name: Stage production build
         run: |
