@@ -29,6 +29,7 @@ export interface TrackInfo {
   durationSecs: number;
   isStream: boolean;
   isLive: boolean;
+  albumArtUrl: string;
 }
 
 export interface PlayerSnapshot {
@@ -352,6 +353,7 @@ export class LuaHost {
     track.set("duration_secs", trackField("durationSecs"));
     track.set("is_stream", trackField("isStream"));
     track.set("is_live", trackField("isLive"));
+    track.set("album_art_url", trackField("albumArtUrl"));
     c.set("track", track);
 
     // cliamp.fs — localStorage-backed.

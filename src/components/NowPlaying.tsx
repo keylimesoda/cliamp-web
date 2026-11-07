@@ -1,14 +1,17 @@
+import QueueScreen from "./QueueScreen";
+import ProgressLabel from "./ProgressLabel";
 import { useState } from "react";
 import { usePlayerStore } from "../store/player";
-import { EQ_BANDS_HZ } from "../core/eq";
+import EqControls from "./EqControls";
 import { VOLUME_MAX_DB, VOLUME_MIN_DB } from "../core/audio/engine";
-import { THEME_NAMES } from "../themes/engine";
 import { useFavoritesStore } from "../store/favorites";
 import { usePluginStore } from "../store/plugins";
 import DragMeter from "./DragMeter";
 import Visualizer from "./Visualizer";
 import LyricsOverlay from "./LyricsOverlay";
 import type { Track } from "../core/types";
+import { isSpokenTrack } from "../core/listening";
+import { PlaybackSpeedPicker, SpokenSkipButton } from "./SpokenControls";
 
 function fmtTime(sec: number): string {
   if (!Number.isFinite(sec) || sec < 0) return "--:--";
@@ -41,11 +44,35 @@ function trackName(t: Track | null): string {
   return t.title;
 }
 
-export default function NowPlaying() {
+function sourceName(t: Track | null): string {
+  if (!t) return "Playing";
+  if (t.station) return t.station;
+  switch (t.provider) {
+    case "podcast":
+      return "Podcasts";
+    case "radio":
+      return "Radio";
+    case "local":
+      return "Local";
+    default:
+      return t.provider || "Playing";
+  }
+}
+
+interface NowPlayingProps {
+  onOpenAppearance: () => void;
+  immersive?: boolean;
+  onImmersiveChange?: (enabled: boolean) => void;
+}
+
+export default function NowPlaying({ immersive = false, onImmersiveChange, onOpenAppearance }: NowPlayingProps) {
   const s = usePlayerStore();
   const favorites = useFavoritesStore();
   const [scrubPos, setScrubPos] = useState<number | null>(null);
   const [showLyrics, setShowLyrics] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showQueue, setShowQueue] = useState(false);
+  const [hideImmersiveTitle, setHideImmersiveTitle] = useState(false);
   const pluginStatus = usePluginStore((s) => s.status);
   const playing =
     s.state === "playing" || s.state === "buffering" || s.state === "seeking";
@@ -53,7 +80,83 @@ export default function NowPlaying() {
   const live = s.track?.stream === true || s.track?.live === true;
   const shownPos = scrubPos ?? s.position;
   const seekRatio = s.duration > 0 ? shownPos / s.duration : 0;
-  const volRatio = (s.volumeDb - VOLUME_MIN_DB) / (VOLUME_MAX_DB - VOLUME_MIN_DB);
+  const spoken = isSpokenTrack(s.track);
+
+  if (showQueue) return <QueueScreen onClose={() => setShowQueue(false)} />;
+
+  if (immersive) {
+    return (
+      <div className={"immersive-app" + (spoken ? " is-spoken" : "")}>
+        <div className="immersive-track-line">
+          {hideImmersiveTitle ? (
+            <span className="name dim">[{sourceName(s.track)}]</span>
+          ) : (
+            <>
+              <span className="glyph nf-icon" aria-hidden>{"\\uf001"}</span>
+              <span className="name">{trackName(s.track)}</span>
+            </>
+          )}
+        </div>
+
+        <div className="immersive-time-status">
+          <span>
+            {fmtTime(shownPos)}
+            {live ? " / LIVE" : ` / ${fmtTime(s.duration)}`}
+          </span>
+          <span className={"state " + st.cls}>{st.text}</span>
+        </div>
+
+        <div aria-hidden />
+
+        <Visualizer immersive />
+
+        <div aria-hidden />
+
+        <div className="immersive-seek-row">
+          {s.seekable ? (
+            <DragMeter
+              value={seekRatio}
+              onRatio={(r) => {
+                s.seek(r * s.duration);
+                setScrubPos(null);
+              }}
+              onScrub={(r) => setScrubPos(r * s.duration)}
+              label="Seek"
+            />
+          ) : (
+            <div className="meter" aria-label="Live stream">
+              <div className="fill" style={{ width: "100%" }} />
+            </div>
+          )}
+        </div>
+
+        <div className="immersive-controls">
+          <button onClick={() => onImmersiveChange?.(false)} aria-label="Exit immersive visualizer">
+            EXIT
+          </button>
+          <button onClick={() => void s.prev()} aria-label="Previous track">
+            <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
+          </button>
+          {spoken && <SpokenSkipButton seconds={-15} />}
+          <button className="immersive-play" onClick={() => void s.toggle()} aria-label="Play or pause">
+            <span className="nf-icon transport-icon" aria-hidden>
+              {playing ? "\uf04c" : "\uf04b"}
+            </span>
+          </button>
+          {spoken && <SpokenSkipButton seconds={30} />}
+          <button onClick={() => void s.next()} aria-label="Next track">
+            <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
+          </button>
+          {spoken && <PlaybackSpeedPicker />}
+          <button onClick={() => setHideImmersiveTitle((v) => !v)} aria-label="Toggle track title or source">
+            {hideImmersiveTitle ? "TITLE" : "SOURCE"}
+          </button>
+        </div>
+
+        <div aria-hidden />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -64,8 +167,8 @@ export default function NowPlaying() {
 
       <section className="nowplaying panel panel-accent">
         <div className="track-line">
-          <span className="glyph" aria-hidden>
-            ♫
+          <span className="glyph nf-icon" aria-hidden>
+            {"\uf001"}
           </span>
           <span className="name">{trackName(s.track)}</span>
         </div>
@@ -80,7 +183,7 @@ export default function NowPlaying() {
           <div className="plugin-status dim">{pluginStatus}</div>
         ) : null}
 
-        <Visualizer />
+        <Visualizer onOpenFull={() => onImmersiveChange?.(true)} />
 
         {s.seekable ? (
           <DragMeter
@@ -98,62 +201,79 @@ export default function NowPlaying() {
           </div>
         )}
 
-        <div className="transport">
-          <button onClick={() => void s.prev()} aria-label="Previous">
-            ⏮
-          </button>
-          <button className="btn-primary" onClick={() => void s.toggle()} aria-label="Play/Pause">
-            {playing ? "⏸" : "▶"}
-          </button>
-          <button onClick={() => void s.next()} aria-label="Next">
-            ⏭
-          </button>
+        <div className={"transport-row" + (spoken ? " is-spoken" : "")}>
+          <button className="compact-more-toggle" onClick={() => setShowAdvanced(true)} aria-expanded={showAdvanced} aria-controls="advanced-controls">MORE</button>
+          <div className="transport">
+            <button onClick={() => void s.prev()} aria-label="Previous">
+              <span className="nf-icon transport-icon" aria-hidden>{"\uf048"}</span>
+            </button>
+            {spoken && <SpokenSkipButton seconds={-15} />}
+            <button className="btn-primary" onClick={() => void s.toggle()} aria-label="Play/Pause">
+              <span className="nf-icon transport-icon" aria-hidden>
+                {playing ? "\uf04c" : "\uf04b"}
+              </span>
+            </button>
+            {spoken && <SpokenSkipButton seconds={30} />}
+            <button onClick={() => void s.next()} aria-label="Next">
+              <span className="nf-icon transport-icon" aria-hidden>{"\uf051"}</span>
+            </button>
+          </div>
+          {spoken && <PlaybackSpeedPicker />}
         </div>
 
         <div className="mix">
-          <div className="eq-bands">
-            {EQ_BANDS_HZ.map((hz, i) => (
-              <div className="eq-band" key={hz} title={`${hz} Hz`}>
-                <span className="hz">{hz >= 1000 ? `${hz / 1000}k` : hz}</span>
-                <span className="db">
-                  {s.eqGains[i] > 0 ? "+" + s.eqGains[i] : s.eqGains[i]}
-                </span>
-              </div>
-            ))}
+          <div
+            id="advanced-controls"
+            className={"advanced-controls" + (showAdvanced ? " is-open" : "")}
+          >
+            <div className="advanced-header">
+              <button
+                className="advanced-close"
+                onClick={() => setShowAdvanced(false)}
+                aria-label="Close playback options"
+              >
+                Close
+              </button>
+              <span>Playback options</span>
+            </div>
+            <EqControls />
+            <div className="help-row">
+              <button className="key-pill" onClick={() => { setShowAdvanced(false); setShowQueue(true); }} aria-label="Open queue">
+                Queue{s.queueCount ? ` (${s.queueCount})` : ""}
+              </button>
+              <span className="key-pill" onClick={() => s.setMono(!s.mono)} role="button">
+                {s.mono ? "Mono" : "Stereo"}
+              </span>
+              <span className="key-pill" onClick={() => s.toggleShuffle()} role="button">
+                Shuffle {s.shuffle === "on" ? "On" : "Off"}
+              </span>
+              <span className="key-pill" onClick={() => s.cycleRepeat()} role="button">
+                Repeat {s.repeat === "off" ? "Off" : s.repeat === "all" ? "All" : "One"}
+              </span>
+              <button className="key-pill" onClick={onOpenAppearance} aria-label={`Choose theme: ${s.theme}`}>
+                Theme {s.theme}
+              </button>
+              <span className="key-pill" onClick={() => setShowLyrics((v) => !v)} role="button">
+                Lyrics {showLyrics ? "On" : "Off"}
+              </span>
+              {s.tracks.length > 1 ? <button className="key-pill" onClick={s.reversePlaylist}>Reverse list</button> : null}
+              {s.track?.provider === "navidrome" ? (
+                <label className="rating-control">Rating
+                  <select aria-label="Track rating" value={s.track.rating ?? 0} disabled={s.ratingBusy}
+                    onChange={(e) => void s.setTrackRating(Number(e.target.value))}>
+                    {[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n ? `★ ${n}` : "Unrated"}</option>)}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+            <div className="volume-control">
+              <label className="volume-label" htmlFor="player-volume">Player volume ({Math.round(s.volumeDb)} dB)</label>
+              <input id="player-volume" type="range" aria-label="Player volume" min={VOLUME_MIN_DB} max={VOLUME_MAX_DB} step="1" value={s.volumeDb}
+                onChange={(e) => s.setVolume(Number(e.target.value))} />
+              <button onClick={() => s.setVolume(0)} aria-label="Reset player volume">Reset 0 dB</button>
+            </div>
           </div>
-          <div className="help-row">
-            <span className="key-pill" onClick={() => s.cyclePreset()} role="button">
-              EQ {s.eqPreset}
-            </span>
-            <span className="key-pill" onClick={() => s.setMono(!s.mono)} role="button">
-              {s.mono ? "Mono" : "Stereo"}
-            </span>
-            <span className="key-pill" onClick={() => s.toggleShuffle()} role="button">
-              Shuffle {s.shuffle === "on" ? "On" : "Off"}
-            </span>
-            <span className="key-pill" onClick={() => s.cycleRepeat()} role="button">
-              Repeat {s.repeat === "off" ? "Off" : s.repeat === "all" ? "All" : "One"}
-            </span>
-            <span
-              className="key-pill"
-              role="button"
-              onClick={() => {
-                const i = THEME_NAMES.indexOf(s.theme);
-                s.setTheme(THEME_NAMES[(i + 1) % THEME_NAMES.length]);
-              }}
-            >
-              Theme {s.theme}
-            </span>
-            <span className="key-pill" onClick={() => setShowLyrics((v) => !v)} role="button">
-              Lyrics {showLyrics ? "On" : "Off"}
-            </span>
-          </div>
-          <DragMeter
-            className="meter-green"
-            value={volRatio}
-            onRatio={(r) => s.setVolume(VOLUME_MIN_DB + r * (VOLUME_MAX_DB - VOLUME_MIN_DB))}
-            label="Volume"
-          />
+
         </div>
       </section>
 
@@ -165,35 +285,39 @@ export default function NowPlaying() {
         ) : (
           s.tracks.map((t, i) => (
             <div
-              className={"row" + (i === s.currentDisplay ? " is-active" : "")}
+              className={"row queue-row" + (i === s.currentDisplay ? " is-active" : "")}
               key={t.path + i}
               onClick={() => void s.playDisplay(i)}
               role="button"
               aria-label={t.title}
             >
-              <span className="marker" aria-hidden>
-                {i === s.currentDisplay ? "▶" : ""}
-              </span>
-              <span className="num">{i + 1}</span>
-              <span className="title">{t.title}</span>
-              {t.favorite ? (
-                <span className="marker is-fav" aria-hidden>
-                  ♥
+              <span className="queue-index">
+                <span className="marker" aria-hidden>
+                  {i === s.currentDisplay ? (playing ? <span className="nf-icon">{"\uf04b"}</span> : ">") : ""}
                 </span>
-              ) : null}
-              <span className="dur">
-                {t.stream ? "LIVE" : t.durationSecs ? fmtTime(t.durationSecs) : "--:--"}
+                <span className="num">{i + 1}</span>
               </span>
-              <span
-                className={"marker" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
-                role="button"
-                aria-label="favorite"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  favorites.toggle(t);
-                }}
-              >
-                ★
+              <span className="title">{t.title}<ProgressLabel track={t} /></span>
+              <span className="queue-meta">
+                {t.favorite ? (
+                  <span className="marker is-fav" aria-hidden>
+                    <span className="nf-icon">{"\uf004"}</span>
+                  </span>
+                ) : null}
+                <span className="dur">
+                  {t.stream ? "LIVE" : t.durationSecs ? fmtTime(t.durationSecs) : "--:--"}
+                </span>
+                <span
+                  className={"queue-favorite-toggle marker" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
+                  role="button"
+                  aria-label="favorite"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    favorites.toggle(t);
+                  }}
+                >
+                  <span className="nf-icon">{"\uf005"}</span>
+                </span>
               </span>
             </div>
           ))
@@ -201,8 +325,10 @@ export default function NowPlaying() {
       </div>
 
       <div className="footer">
-        {s.error ? (
-          <div className="status-row is-error">ERR: {s.error}</div>
+        {s.recovery ? (
+          <div className="recovery-controls" role="status"><span>{s.recovery.phase === "offline" ? "Waiting for connection…" : `Reconnecting ${s.recovery.attempt}/5…`}</span><button onClick={s.pause}>Pause</button></div>
+        ) : s.error ? (
+          <div className="recovery-controls"><span className="status-row is-error">{s.error}</span><button onClick={() => void s.retry()}>Retry</button></div>
         ) : (
           <div className="status-row">
             {s.track?.station ? `${s.track.station} · ` : ""}

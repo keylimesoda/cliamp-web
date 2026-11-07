@@ -37,12 +37,29 @@ function frame(t: number): VizData {
 }
 
 describe("visualizer registry", () => {
-  it("lists all 33 modes in cycle order (32 + None)", () => {
-    expect(VISUALIZERS).toHaveLength(33);
+  it("lists all 35 modes in cycle order (34 + None)", () => {
+    expect(VISUALIZERS).toHaveLength(35);
     expect(VISUALIZERS[0].name).toBe("Bars");
     expect(VISUALIZERS[VISUALIZERS.length - 1].name).toBe("None");
     const names = VISUALIZERS.map((v) => v.name);
     expect(new Set(names).size).toBe(names.length);
+    expect(names.slice(-3)).toEqual(["YinYang", "Ethereal", "None"]);
+  });
+
+  it.each(["YinYang", "Ethereal"])("%s handles strip, tiny, resized and paused grids", (name) => {
+    const viz = VISUALIZERS.find((v) => v.name === name)!.make();
+    for (const [cols, rows] of [[80, 3], [1, 1], [0, 0], [30, 20], [80, 16]]) {
+      const data = { ...frame(1), cols, rows };
+      for (let i = 0; i < 30; i++) viz.tick(0.05, data);
+      const out = viz.render(data);
+      expect(out.rows.length).toBe(rows);
+      for (const row of out.rows) expect(row.length).toBe(cols);
+      const paused = { ...data, playing: false, bands: new Float32Array(0) };
+      for (let i = 0; i < 20; i++) viz.tick(0.2, paused);
+      const still = viz.render(paused);
+      viz.tick(0.2, paused);
+      expect(viz.render(paused)).toEqual(still);
+    }
   });
 
   it("every mode renders valid full-grid frames without throwing", () => {

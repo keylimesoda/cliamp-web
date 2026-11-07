@@ -7,16 +7,19 @@
  *           → volume gain → stereo out → destination
  *                          ↘ mono downmix → upmix → mono out → destination
  *
- * Gapless: the next finite track is fetched + decoded ahead of time;
- * when the current track ends, the decoded buffer is played through the
- * same EQ/volume chain while the element loads the next source in the
- * background, then hands over seamlessly.
+ * Spoken media uses native pitch-preserving playbackRate before Web Audio;
+ * the worklet stays at unity so source time and audio consumption agree.
+ *
+ * Transitions: short finite tracks can be fetched/decoded ahead of time.
+ * On end, the decoded next track enters the same DSP chain and the store
+ * advances the playlist. This is best-effort, not sample-accurate gapless.
  *
  * The AudioContext is created lazily on first play (user gesture) so the
  * PWA can start suspended and unlock on the first tap.
  */
 import { EQ_BANDS_HZ, EQ_Q, clampDb } from "../eq";
 import { bandLevels, FFT_SIZE, Spectrum } from "../spectrum";
+import { isSpokenTrack } from "../listening";
 import type { PlaybackState, ResolvedSource, Track } from "../types";
 
 export const VOLUME_MIN_DB = -50;
@@ -30,7 +33,7 @@ function dbToGain(db: number): number {
 
 export interface EngineCallbacks {
   /** Fired when the current source reached its end (or the gapless bridge did). */
-  onTrackEnd?: () => void;
+  onTrackEnd?: (promoted: boolean) => void;
   onError?: (message: string) => void;
 }
 
@@ -41,23 +44,28 @@ export interface EngineSnapshot {
   speed: number;
   mono: boolean;
   eqGains: number[];
+  dspAvailable: boolean;
 }
 
 export class AudioEngine {
   private cb: EngineCallbacks;
   private ctx: AudioContext | null = null;
-  private element = new Audio();
+  private processedElement = new Audio();
+  private plainElement = new Audio();
+  private element = this.processedElement;
+  private graphInput: GainNode | null = null;
+  private loadGeneration = 0;
+  private preloadGeneration = 0;
+  private preloadAbort: AbortController | null = null;
+  private resumeCleanup: (() => void) | null = null;
+  private seekable = false;
   private wsolaNode: AudioWorkletNode | null = null;
   private eqFilters: BiquadFilterNode[] = [];
-  private chainIn: GainNode | null = null;
   private analyser: AnalyserNode | null = null;
   private volumeGain: GainNode | null = null;
   private stereoOut: GainNode | null = null;
   private monoOut: GainNode | null = null;
-  private wsolaGain: GainNode | null = null;
-  private bypassGain: GainNode | null = null;
-  private corsMode = true; // true: crossOrigin="anonymous", worklet path
-  private staleError = false; // one-shot: swallows the CORS-attempt error event
+  private loading = false;
 
   private spectrum = new Spectrum();
   private bands = new Float32Array(10);
@@ -84,6 +92,21 @@ export class AudioEngine {
   constructor(cb: EngineCallbacks = {}) {
     this.cb = cb;
     this.element.preload = "auto";
+    this.plainElement.preload = "auto";
+    for (const el of [this.processedElement, this.plainElement]) {
+        const active = () => this.element === el && !this.gaplessSource;
+        el.addEventListener("playing", () => { if (active()) this.setState("playing"); });
+        el.addEventListener("pause", () => {
+          if (active() && !this.loading && this.state !== "stopped") this.setState("paused");
+        });
+        el.addEventListener("waiting", () => { if (active()) this.setState("buffering"); });
+        el.addEventListener("seeking", () => { if (active()) this.setState("seeking"); });
+        el.addEventListener("seeked", () => { if (active()) this.setState(el.paused ? "paused" : "playing"); });
+        el.addEventListener("ended", () => { if (active()) this.handleEnded(); });
+        el.addEventListener("error", () => {
+          if (active() && !this.loading && el.error && this.state !== "stopped") this.cb.onError?.(el.error.message || "playback error");
+        });
+      }
   }
 
   // ---- lifecycle ------------------------------------------------------
@@ -94,29 +117,20 @@ export class AudioEngine {
     this.initPromise = (async () => {
       const ctx = new AudioContext({ latencyHint: "interactive" });
       this.ctx = ctx;
-      await ctx.audioWorklet.addModule("/worklets/wsola.js");
+      void ctx.resume().catch(() => {});
+      try { await ctx.audioWorklet.addModule(new URL("worklets/wsola.js", document.baseURI).href); }
+      catch (e) { this.initPromise = null; this.ctx = null; void ctx.close?.().catch(() => {}); throw e; }
 
-      const source = ctx.createMediaElementSource(this.element);
+      const source = ctx.createMediaElementSource(this.processedElement);
+      this.graphInput = ctx.createGain();
+      source.connect(this.graphInput);
 
       const chainIn = ctx.createGain();
-      this.chainIn = chainIn;
 
-      // Dual routing: the WSOLA worklet path (full features) and a plain
-      // bypass (for tainted cross-origin sources, where the worklet would
-      // receive zero-filled input). Exactly one is active at a time.
-      const wsolaGain = ctx.createGain();
-      this.wsolaGain = wsolaGain;
-      wsolaGain.gain.value = 1;
-      const bypassGain = ctx.createGain();
-      this.bypassGain = bypassGain;
-      bypassGain.gain.value = 0;
       const wsola = new AudioWorkletNode(ctx, "wsola");
       this.wsolaNode = wsola;
-      source.connect(wsolaGain);
-      wsolaGain.connect(wsola);
+      this.graphInput.connect(wsola);
       wsola.connect(chainIn);
-      source.connect(bypassGain);
-      bypassGain.connect(chainIn);
 
       let prev: AudioNode = chainIn;
       this.eqFilters = EQ_BANDS_HZ.map((f) => {
@@ -150,10 +164,12 @@ export class AudioEngine {
 
       const monoDown = ctx.createGain();
       monoDown.channelCount = 1;
-      monoDown.channelInterpretation = "discrete";
+      monoDown.channelCountMode = "explicit";
+      monoDown.channelInterpretation = "speakers";
       const monoUp = ctx.createGain();
       monoUp.channelCount = 2;
-      monoUp.channelInterpretation = "discrete";
+      monoUp.channelCountMode = "explicit";
+      monoUp.channelInterpretation = "speakers";
       const monoOut = ctx.createGain();
       this.monoOut = monoOut;
       monoOut.gain.value = 0;
@@ -164,22 +180,8 @@ export class AudioEngine {
 
       this.sampleBuf = new Float32Array(analyser.fftSize);
 
-      this.element.addEventListener("playing", () => this.setState("playing"));
-      this.element.addEventListener("pause", () => {
-        if (this.state === "playing" || this.state === "buffering") this.setState("paused");
-      });
-      this.element.addEventListener("waiting", () => this.setState("buffering"));
-      this.element.addEventListener("seeking", () => this.setState("seeking"));
-      this.element.addEventListener("ended", () => this.handleEnded());
-      this.element.addEventListener("error", () => {
-        if (this.staleError) {
-          this.staleError = false;
-          return; // CORS-attempt error, already handled by the fallback
-        }
-        if (this.element.error && this.state !== "stopped") {
-          this.cb.onError?.(this.element.error.message ?? "playback error");
-        }
-      });
+      this.setEqGains(this.eqGains);
+      this.setMono(this.mono);
       this.applySpeedToWorklet();
     })();
     return this.initPromise;
@@ -189,38 +191,80 @@ export class AudioEngine {
 
   /** Load and play a track from a resolved source. */
   async load(track: Track, src: ResolvedSource, startAtSec = 0): Promise<void> {
+    const generation = ++this.loadGeneration;
+    // Podcast enclosures use the standalone element immediately: they do not
+    // need a worklet or CORS permission and retain the initiating touch gesture.
+    if (src.direct) {
+      this.loading = true;
+      this.element.pause();
+      this.resumeCleanup?.();
+      this.track = track;
+      this.applySpeedToWorklet();
+      this.seekable = src.seekable === true;
+      this.stopGapless();
+      this.processedElement.pause();
+      this.element = this.plainElement;
+      this.bands.fill(0);
+      this.sampleBuf?.fill(0);
+      const el = this.element;
+      el.volume = Math.min(1, dbToGain(this.volumeDb));
+      el.playbackRate = this.speed;
+      el.src = src.url;
+      el.load();
+      this.applyResume(el, src, startAtSec);
+      try { await el.play(); }
+      catch (e) { if (generation === this.loadGeneration) { this.loading = false; throw e; } }
+      if (generation !== this.loadGeneration) return;
+      this.loading = false;
+      this.notify();
+      return;
+    }
     await this.init();
+    if (generation !== this.loadGeneration) return;
     const ctx = this.ctx!;
+    this.loading = true;
+    this.element.pause();
+    this.resumeCleanup?.();
     this.track = track;
+    this.applySpeedToWorklet();
+    this.seekable = src.seekable === true;
     this.stopGapless();
     this.resetWorklet();
     this.setState("stopped");
-    const el = this.element;
     await ctx.resume();
+    if (generation !== this.loadGeneration) return;
+    const el = this.processedElement;
+    this.element = el;
     try {
       // Prefer CORS mode: crossOrigin="anonymous" lets the worklet and
       // analyser read real samples (speed + visualizer work).
-      this.corsMode = true;
       el.crossOrigin = "anonymous";
       el.src = src.url;
       el.load();
       this.applyResume(el, src, startAtSec);
-      this.applyRouting();
-      this.staleError = true; // armed: swallow the CORS attempt's error event if it fails
       await el.play();
-      this.staleError = false; // succeeded: no stale error pending
-    } catch {
-      // Server sent no CORS headers: fall back to tainted playback.
-      // Audio still plays, but the worklet/analyser receive zero-filled
-      // input, so route around the worklet (no speed/visualizer).
-      this.corsMode = false;
-      el.removeAttribute("crossorigin");
-      el.src = src.url;
-      el.load();
-      this.applyResume(el, src, startAtSec);
-      this.applyRouting();
-      await el.play(); // throws to the caller if this also fails
+    } catch (error) {
+      if (generation !== this.loadGeneration) return;
+      if (error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "AbortError")) {
+        this.loading = false;
+        throw error;
+      }
+      // A media element connected to Web Audio is silenced by CORS even
+      // when routed around a worklet. Use an unconnected element instead.
+      el.pause();
+      this.resumeCleanup?.();
+      const plain = this.plainElement;
+      this.element = plain;
+      plain.src = src.url;
+      plain.load();
+      plain.volume = Math.min(1, dbToGain(this.volumeDb));
+      plain.playbackRate = this.speed;
+      this.applyResume(plain, src, startAtSec);
+      try { await plain.play(); }
+      catch (e) { if (generation === this.loadGeneration) { this.loading = false; throw e; } }
     }
+    if (generation !== this.loadGeneration) return;
+    this.loading = false;
     this.notify();
   }
 
@@ -230,35 +274,40 @@ export class AudioEngine {
       el.currentTime = Math.min(startAtSec, Math.max(0, (el.duration || Infinity) - 1));
     };
     if (el.readyState >= 1) onMeta();
-    else el.addEventListener("loadedmetadata", onMeta, { once: true });
-  }
-
-  private applyRouting(): void {
-    if (this.wsolaGain && this.bypassGain) {
-      this.wsolaGain.gain.value = this.corsMode ? 1 : 0;
-      this.bypassGain.gain.value = this.corsMode ? 0 : 1;
+    else {
+      el.addEventListener("loadedmetadata", onMeta, { once: true });
+      this.resumeCleanup = () => el.removeEventListener("loadedmetadata", onMeta);
     }
   }
 
   async play(): Promise<void> {
+    if (this.element === this.plainElement) {
+      await this.element.play();
+      this.setState("playing");
+      return;
+    }
     await this.init();
     const ctx = this.ctx!;
     await ctx.resume();
-    if (this.gaplessSource) return; // bridge already running
+    if (this.gaplessSource) { this.setState("playing"); return; }
     await this.element.play();
+    this.setState("playing");
   }
 
   pause(): void {
-    if (!this.ctx) return;
-    if (this.gaplessSource) this.ctx.suspend();
+    this.loadGeneration++;
+    this.loading = false;
+    if (this.gaplessSource && this.ctx) this.ctx.suspend();
     else this.element.pause();
+    this.setState("paused");
   }
 
   /** Seek within the current (finite) source. */
   seek(sec: number): void {
-    if (!this.ctx || !this.track) return;
-    if (this.track.stream) return;
-    if (this.gaplessSource) {
+    if (!this.track) return;
+    if (!this.seekable || !Number.isFinite(sec)) return;
+    this.clearPreload();
+    if (this.gaplessSource && this.ctx) {
       const buffer = this.gaplessSource.buffer;
       if (!buffer) return;
       const src = this.gaplessSource;
@@ -267,7 +316,7 @@ export class AudioEngine {
       this.gaplessSource = null;
       const s = this.ctx.createBufferSource();
       s.buffer = buffer;
-      s.connect(this.chainIn!);
+      s.connect(this.graphInput!);
       s.onended = () => this.handleBufferEnd();
       s.start(0, Math.max(0, Math.min(sec, buffer.duration - 0.05)));
       this.gaplessSource = s;
@@ -281,8 +330,10 @@ export class AudioEngine {
   // ---- mixing ---------------------------------------------------------
 
   setVolumeDb(db: number): void {
+    if (!Number.isFinite(db)) return;
     this.volumeDb = Math.min(VOLUME_MAX_DB, Math.max(VOLUME_MIN_DB, db));
     if (this.volumeGain) this.volumeGain.gain.value = dbToGain(this.volumeDb);
+    this.plainElement.volume = Math.min(1, dbToGain(this.volumeDb));
     this.notify();
   }
 
@@ -297,8 +348,10 @@ export class AudioEngine {
   }
 
   setSpeed(ratio: number): void {
+    if (!Number.isFinite(ratio)) return;
     this.speed = Math.min(SPEED_MAX, Math.max(SPEED_MIN, ratio));
     this.applySpeedToWorklet();
+    this.plainElement.playbackRate = this.speed;
     this.notify();
   }
 
@@ -316,23 +369,54 @@ export class AudioEngine {
   /** Fetch + decode the next finite track in the background. */
   armGapless(track: Track, url: string, headers?: Record<string, string>): void {
     if (!this.ctx) return;
+    this.clearPreload();
+    // Avoid decoding long podcasts or unbounded downloads into car memory.
+    if (!track.durationSecs || track.durationSecs > 600 || track.live || isSpokenTrack(track) || isSpokenTrack(this.track)) return;
+    const generation = this.preloadGeneration;
+    const abort = new AbortController();
+    this.preloadAbort = abort;
     const ctx = this.ctx;
-    this.gaplessTrack = track;
-    fetch(url, headers ? { headers } : undefined)
-      .then((res) => (res.ok ? res.arrayBuffer() : Promise.reject(new Error(String(res.status)))))
+    fetch(url, { headers, signal: abort.signal })
+      .then(async (res) => {
+        if (!res.ok || !res.body) throw new Error("Preload unavailable");
+        const reader = res.body.getReader();
+        const chunks: Uint8Array<ArrayBuffer>[] = [];
+        let size = 0;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > 32 * 1024 * 1024) { await reader.cancel(); throw new Error("Preload too large"); }
+            chunks.push(value);
+          }
+          return new Blob(chunks).arrayBuffer();
+        } finally { reader.releaseLock(); }
+      })
       .then((data) => ctx.decodeAudioData(data))
       .then((buf) => {
-        if (buf.length > 0) this.gaplessBuffer = buf;
+        if (generation === this.preloadGeneration && buf.length > 0) {
+          this.gaplessTrack = track;
+          this.gaplessBuffer = buf;
+        }
       })
       .catch(() => {
-        this.gaplessBuffer = null; // stream or CORS — fall back to element end
+        if (generation === this.preloadGeneration) this.clearPreload();
       });
+  }
+
+  /** Invalidate pending downloads without interrupting a playing bridge. */
+  clearPreload(): void {
+    this.preloadGeneration++;
+    this.preloadAbort?.abort();
+    this.preloadAbort = null;
+    this.gaplessBuffer = null;
+    this.gaplessTrack = null;
   }
 
   /** Drop a pending gapless buffer and stop any running bridge. */
   stopGapless(): void {
-    this.gaplessBuffer = null;
-    this.gaplessTrack = null;
+    this.clearPreload();
     if (this.gaplessSource) {
       this.gaplessSource.onended = null;
       try { this.gaplessSource.stop(); } catch { /* not running */ }
@@ -341,6 +425,7 @@ export class AudioEngine {
   }
 
   private handleEnded(): void {
+    const promoted = this.gaplessBuffer !== null;
     // Element source reached its end.
     if (this.gaplessBuffer) {
       // The preloaded buffer IS the next track: play it now (gapless),
@@ -349,18 +434,12 @@ export class AudioEngine {
     } else {
       this.setState("stopped");
     }
-    this.cb.onTrackEnd?.();
+    this.cb.onTrackEnd?.(promoted);
   }
 
   private handleBufferEnd(): void {
     this.gaplessSource = null;
-    if (this.gaplessBuffer) {
-      this.startGaplessBuffer();
-      this.cb.onTrackEnd?.();
-      return;
-    }
-    // Nothing preloaded: the store may have reloaded the element; if not, stop.
-    if (this.element.paused) this.setState("stopped");
+    this.handleEnded();
   }
 
   private startGaplessBuffer(): void {
@@ -373,7 +452,9 @@ export class AudioEngine {
     }
     const s = this.ctx!.createBufferSource();
     s.buffer = buf;
-    s.connect(this.chainIn!);
+    // Both media elements and decoded bridges share the speed/EQ pipeline.
+    this.seekable = true;
+    s.connect(this.graphInput!);
     s.onended = () => this.handleBufferEnd();
     s.start();
     this.gaplessSource = s;
@@ -387,7 +468,17 @@ export class AudioEngine {
   }
 
   private applySpeedToWorklet(): void {
-    this.wsolaNode?.port.postMessage({ type: "speed", value: this.speed });
+    // A real-time media input cannot feed WSOLA faster than the media clock.
+    // Spoken audio uses the browser's pitch-preserving transport rate, keeping
+    // the clock, seeking, duration and track boundaries in source seconds.
+    const spoken = isSpokenTrack(this.track);
+    this.processedElement.preservesPitch = true;
+    this.plainElement.preservesPitch = true;
+    this.processedElement.defaultPlaybackRate = spoken ? this.speed : 1;
+    this.plainElement.defaultPlaybackRate = this.speed;
+    this.processedElement.playbackRate = spoken ? this.speed : 1;
+    this.plainElement.playbackRate = this.speed;
+    this.wsolaNode?.port.postMessage({ type: "speed", value: spoken ? 1 : this.speed });
   }
 
   // ---- state / queries ------------------------------------------------
@@ -410,7 +501,14 @@ export class AudioEngine {
       speed: this.speed,
       mono: this.mono,
       eqGains: [...this.eqGains],
+      dspAvailable: this.element !== this.plainElement,
     };
+  }
+
+  updateTrack(path: string, patch: Partial<Track>): void {
+    if (this.track?.path === path) this.track = { ...this.track, ...patch };
+    if (this.gaplessTrack?.path === path) this.gaplessTrack = { ...this.gaplessTrack, ...patch };
+    this.notify();
   }
 
   subscribe(fn: (s: EngineSnapshot) => void): () => void {
@@ -421,6 +519,10 @@ export class AudioEngine {
 
   /** Current playback position in seconds (0 for unknown/live). */
   getPosition(): number {
+    if (this.element === this.plainElement) {
+      const position = this.element.currentTime;
+      return Number.isFinite(position) ? position : 0;
+    }
     if (!this.ctx) return 0;
     if (this.gaplessSource) {
       return this.gaplessOffset + (this.ctx.currentTime - this.gaplessStartedAt);
@@ -438,7 +540,7 @@ export class AudioEngine {
 
   /** True while the current source is finite and seekable. */
   isSeekable(): boolean {
-    return !this.track?.stream && this.getDuration() > 0;
+    return this.seekable && !this.track?.live && this.getDuration() > 0;
   }
 
   // ---- visualizer tap -------------------------------------------------

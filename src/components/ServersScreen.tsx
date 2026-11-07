@@ -1,42 +1,44 @@
 import { useState } from "react";
-import { useServers, type ServerConfig, type ServerId } from "../store/servers";
+import { useServers, type ServerConfig } from "../store/servers";
+import { SERVER_CATALOG, verifyServerConfig, type AvailableServerId } from "../providers/serverCatalog";
 import NavidromeBrowser from "./NavidromeBrowser";
 import ServerBrowser from "./ServerBrowser";
+import PlexSetup from "./PlexSetup";
+import PlexBrowser from "./PlexBrowser";
 import "../providers/navidrome"; // registers the provider (side-effect)
 
-const SERVERS: { id: ServerId; name: string; needsCreds: boolean }[] = [
-  { id: "navidrome", name: "Navidrome", needsCreds: true },
-  { id: "jellyfin", name: "Jellyfin", needsCreds: true },
-  { id: "emby", name: "Emby", needsCreds: true },
-  { id: "plex", name: "Plex", needsCreds: true },
-  { id: "audiobookshelf", name: "Audiobookshelf", needsCreds: true },
-  { id: "lyrion", name: "Lyrion (LMS)", needsCreds: false },
-];
-
-/**
- * Self-hosted servers screen — configure a music server (base URL +
- * credentials) and open its browser. Navidrome is fully implemented
- * (Subsonic, works out-of-the-box); the others require the server to
- * permit the PWA origin via CORS.
- */
+/** Show only servers with implemented authentication; verify before saving. */
 export default function ServersScreen() {
   const servers = useServers();
-  const [editing, setEditing] = useState<ServerId | null>(null);
-  const [browse, setBrowse] = useState<ServerId | null>(null);
+  const [editing, setEditing] = useState<AvailableServerId | null>(null);
+  const [browse, setBrowse] = useState<AvailableServerId | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<ServerConfig>({ url: "", user: "", password: "" });
 
-  if (browse) return browse === "navidrome" ? <NavidromeBrowser /> : <ServerBrowser id={browse} />;
+  if (browse) return browse === "navidrome" ? <NavidromeBrowser /> : browse === "plex" ? <PlexBrowser onBack={() => setBrowse(null)} /> : <ServerBrowser id={browse} />;
+  if (editing === "plex") return <PlexSetup initial={servers.getConfig("plex")} onCancel={() => setEditing(null)} onConnected={(config) => {
+    servers.saveConfig("plex", config); setEditing(null); setBrowse("plex");
+  }} />;
 
-  const open = (id: ServerId) => {
+  const open = (id: AvailableServerId) => {
+    setError(null);
     const c = servers.getConfig(id);
     if (c) setForm({ url: c.url, user: c.user ?? "", password: c.password ?? "", token: c.token, libraries: c.libraries });
     else setForm({ url: "", user: "", password: "" });
     setEditing(id);
   };
-  const save = (id: ServerId) => {
-    servers.saveConfig(id, form);
-    setEditing(null);
-    setBrowse(id);
+  const save = async (id: AvailableServerId) => {
+    if (busy) return;
+    setBusy(true); setError(null);
+    const config = { ...form, url: form.url.trim().replace(/\/+$/, ""), user: form.user?.trim(), token: form.token?.trim() };
+    try {
+      await verifyServerConfig(id, config);
+      servers.saveConfig(id, config);
+      setEditing(null);
+      setBrowse(id);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not connect to server"); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -48,10 +50,12 @@ export default function ServersScreen() {
 
       {editing ? (
         <div className="panel panel-accent" style={{ flex: 1, minHeight: 0 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", padding: "var(--pad)" }}>
-            <h2 style={{ margin: 0, color: "var(--text-accent)" }}>Configure {SERVERS.find((s) => s.id === editing)?.name}</h2>
+          <form onSubmit={(e) => { e.preventDefault(); void save(editing); }} style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", padding: "var(--pad)", overflowY: "auto", height: "100%" }}>
+            <h2 style={{ margin: 0, color: "var(--text-accent)" }}>Connect to {SERVER_CATALOG.find((s) => s.id === editing)?.name}</h2>
             <input
               type="url"
+              aria-label="Server URL"
+              required disabled={busy}
               placeholder="Base URL (http://192.168.1.10:4005)"
               value={form.url}
               onChange={(e) => setForm({ ...form, url: e.target.value })}
@@ -59,6 +63,7 @@ export default function ServersScreen() {
             />
             <input
               type="text"
+              aria-label="Username" autoComplete="username" disabled={busy}
               placeholder="Username"
               value={form.user ?? ""}
               onChange={(e) => setForm({ ...form, user: e.target.value })}
@@ -66,29 +71,32 @@ export default function ServersScreen() {
             />
             <input
               type="password"
+              aria-label="Password" autoComplete="current-password" disabled={busy}
               placeholder="Password"
               value={form.password ?? ""}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               style={inputStyle}
             />
+            {editing === "audiobookshelf" && <input type="password" disabled={busy} placeholder="API token (optional with username/password)" aria-label="API token" value={form.token || ""} onChange={(e) => setForm({ ...form, token: e.target.value })} style={inputStyle} />}
+            {error && <div role="alert">{error}</div>}
             <div style={{ display: "flex", gap: "var(--gap)" }}>
-              <button className="btn-accent" style={{ flex: 1 }} onClick={() => save(editing)}>
-                Save
+              <button type="submit" disabled={busy} className="btn-accent" style={{ flex: 1 }}>
+                {busy ? "Connecting…" : "Connect"}
               </button>
-              <button style={{ flex: 1 }} onClick={() => setEditing(null)}>
+              <button type="button" disabled={busy} style={{ flex: 1 }} onClick={() => setEditing(null)}>
                 Cancel
               </button>
             </div>
             <p className="dim" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
               The server must allow the PWA origin via CORS. Navidrome does by default.
             </p>
-          </div>
+          </form>
         </div>
       ) : (
         <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
           <div className="list" style={{ overflowY: "auto", flex: 1 }}>
-            {SERVERS.map((s) => {
-              const configured = servers.isConfigured(s.id, s.needsCreds);
+            {SERVER_CATALOG.map((s) => {
+              const configured = servers.isConfigured(s.id);
               return (
                 <div className="row" key={s.id} onClick={() => (configured ? setBrowse(s.id) : open(s.id))} role="button" aria-label={s.name}>
                   <span className={"marker" + (configured ? "" : " is-fav")} aria-hidden>
@@ -96,6 +104,7 @@ export default function ServersScreen() {
                   </span>
                   <span className="title">{s.name}</span>
                   <span className="dur">{configured ? "configured" : "setup"}</span>
+                  {configured && <button aria-label={`Edit ${s.name}`} onClick={(e) => { e.stopPropagation(); open(s.id); }}>Edit</button>}
                 </div>
               );
             })}

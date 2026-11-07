@@ -1,3 +1,5 @@
+import SubscribedShows from "./SubscribedShows";
+import ProgressLabel from "./ProgressLabel";
 import { useState } from "react";
 import { APPLE_CATEGORIES, podcastBrowse, type PodcastShow } from "../providers/podcast";
 import { usePlayerStore } from "../store/player";
@@ -28,12 +30,15 @@ function Row({ label, hint, onClick, marker }: { label: string; hint?: string; o
  * episodes (RSS). Tapping an episode loads the show's episodes into the
  * playback playlist and plays it. Shows can be subscribed (persisted).
  */
-export default function PodcastBrowser() {
-  const playTrack = usePlayerStore((s) => s.playTrack);
+interface PodcastBrowserProps {
+  initialShow?: PodcastShow | null;
+}
+
+export default function PodcastBrowser({ initialShow = null }: PodcastBrowserProps) {
   const loadPlaylist = usePlayerStore((s) => s.loadPlaylist);
   const favorites = useFavoritesStore();
   const prefs = usePodcastPrefs();
-  const [view, setView] = useState<View>({ kind: "home" });
+  const [view, setView] = useState<View>(() => initialShow ? { kind: "show", show: initialShow } : { kind: "home" });
   const [query, setQuery] = useState("");
 
   const chart = useAsync(
@@ -57,13 +62,14 @@ export default function PodcastBrowser() {
               .lookupShow(view.show.collectionId)
               .then((s) => podcastBrowse.showEpisodes(s.feedUrl!, s.name, 300))
         : Promise.resolve([]),
-    view.kind === "show" ? "show:" + view.show.collectionId : "",
+    view.kind === "show" ? "show:" + (view.show.feedUrl || view.show.collectionId) : "",
   );
 
   const back = () => setView({ kind: "home" });
   const openShow = (s: PodcastShow) => setView({ kind: "show", show: s });
   const playEpisode = (t: Track) => {
-    void playTrack(t, 0);
+    const tracks = episodes.data || [t];
+    void loadPlaylist(tracks, Math.max(0, tracks.findIndex((x) => x.path === t.path)));
   };
   const playAll = (t: Track[]) => {
     void loadPlaylist(t, 0, true);
@@ -94,7 +100,7 @@ export default function PodcastBrowser() {
     : "Source";
 
   return (
-    <div className="app">
+    <div className="app source-browser">
       <div className="app-titlebar">
         <button onClick={back} style={{ padding: 0 }} aria-label="Back" disabled={view.kind === "home"}>
           ◀
@@ -137,16 +143,8 @@ export default function PodcastBrowser() {
       {view.kind === "home" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", flex: 1, minHeight: 0 }}>
           {prefs.subs.length > 0 && (
-            <div className="panel" style={{ padding: "0.4rem" }}>
-              <div className="list">
-                {prefs.subs.map((s) => (
-                  <div className="row" key={s.feedUrl} onClick={() => openShow({ collectionId: s.collectionId ?? 0, name: s.name, feedUrl: s.feedUrl, artworkUrl: s.artworkUrl })} role="button" aria-label={s.name}>
-                    <span className="marker is-fav" aria-hidden>♥</span>
-                    <span className="title">{s.name}</span>
-                    <span className="dur">sub</span>
-                  </div>
-                ))}
-              </div>
+            <div className="panel subscriptions-panel" style={{ padding: "0.4rem" }}>
+              <SubscribedShows onOpenShow={(s) => openShow({ ...s, collectionId: s.collectionId ?? 0 })} />
             </div>
           )}
           <div className="panel" style={{ padding: "0.4rem" }}>
@@ -154,24 +152,25 @@ export default function PodcastBrowser() {
               <Row label="Browse categories" onClick={() => setView({ kind: "categories" })} />
             </div>
           </div>
-          <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0, display: "flex" }}>
-            <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+          <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+            <div className="list">
               <Row label="Top Shows (US)" hint="chart" />
               {showList.map((s) => (
                 <div className="row" key={s.collectionId} onClick={() => openShow(s)} role="button" aria-label={s.name}>
+                  <span className="marker" aria-hidden>▸</span>
+                  <span className="title">{s.name}</span>
+                  <span className="dur">{s.genre ?? ""}</span>
                   <span
-                    className={"marker" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
+                    className={"save-toggle" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (s.feedUrl) prefs.toggleSub({ feedUrl: s.feedUrl, name: s.name, collectionId: s.collectionId, artworkUrl: s.artworkUrl });
                     }}
                     role="button"
-                    aria-label="Subscribe"
+                    aria-label={prefs.isSubscribed(s.feedUrl ?? "") ? "Unsubscribe" : "Subscribe"}
                   >
-                    {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : ""}
+                    {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : "♡"}
                   </span>
-                  <span className="title">{s.name}</span>
-                  <span className="dur">{s.genre ?? ""}</span>
                 </div>
               ))}
               {chart.busy ? <Row label="loading top shows…" /> : null}
@@ -181,8 +180,8 @@ export default function PodcastBrowser() {
       )}
 
       {view.kind === "categories" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {APPLE_CATEGORIES.map((c) => (
               <Row key={c.genreId} label={c.name} onClick={() => setView({ kind: "category", name: c.name })} />
             ))}
@@ -191,24 +190,25 @@ export default function PodcastBrowser() {
       )}
 
       {(view.kind === "category" || view.kind === "search") && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {listBusy ? <Row label="loading shows…" /> : null}
             {showList.map((s) => (
               <div className="row" key={s.collectionId} onClick={() => openShow(s)} role="button" aria-label={s.name}>
+                <span className="marker" aria-hidden>▸</span>
+                <span className="title">{s.name}</span>
+                <span className="dur">{s.genre ?? ""}</span>
                 <span
-                  className={"marker" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
+                  className={"save-toggle" + (prefs.isSubscribed(s.feedUrl ?? "") ? " is-fav" : "")}
                   onClick={(e) => {
                     e.stopPropagation();
                     if (s.feedUrl) prefs.toggleSub({ feedUrl: s.feedUrl, name: s.name, collectionId: s.collectionId, artworkUrl: s.artworkUrl });
                   }}
                   role="button"
-                  aria-label="Subscribe"
+                  aria-label={prefs.isSubscribed(s.feedUrl ?? "") ? "Unsubscribe" : "Subscribe"}
                 >
-                  {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : ""}
+                  {prefs.isSubscribed(s.feedUrl ?? "") ? "♥" : "♡"}
                 </span>
-                <span className="title">{s.name}</span>
-                <span className="dur">{s.genre ?? ""}</span>
               </div>
             ))}
             {!listBusy && showList.length === 0 ? <Row label="no shows" /> : null}
@@ -217,8 +217,8 @@ export default function PodcastBrowser() {
       )}
 
       {view.kind === "show" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {episodes.busy ? <Row label="loading episodes…" /> : null}
             {!episodes.busy && episodes.data && episodes.data.length > 0 ? (
               <Row label={`▶ Play all (${episodes.data.length})`} hint="queue" onClick={() => playAll(episodes.data!)} />
@@ -226,15 +226,15 @@ export default function PodcastBrowser() {
             {(episodes.data ?? []).map((t, i) => (
               <div className="row" key={t.guid ?? t.path + i} onClick={() => playEpisode(t)} role="button" aria-label={t.title}>
                 <span className="marker" aria-hidden>♫</span>
-                <span className="title">{t.title}</span>
+                <span className="title">{t.title}<ProgressLabel track={t} /></span>
                 <span className="dur">{t.durationSecs ? fmtDur(t.durationSecs) : ""}</span>
                 <span
-                  className={"marker" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
+                  className={"save-toggle" + (favorites.tracks.some((x) => x.path === t.path) ? " is-fav" : "")}
                   role="button"
-                  aria-label="favorite"
+                  aria-label={favorites.tracks.some((x) => x.path === t.path) ? "Remove favorite" : "Favorite episode"}
                   onClick={(e) => { e.stopPropagation(); favorites.toggle(t); }}
                 >
-                  ★
+                  {favorites.tracks.some((x) => x.path === t.path) ? "★" : "☆"}
                 </span>
               </div>
             ))}
@@ -246,7 +246,7 @@ export default function PodcastBrowser() {
       <div className="footer">
         <div className="help-row">
           <span>
-            <span className="key-pill">tip</span> tap an episode to play · ♥ subscribes
+            <span className="key-pill">tip</span> tap to open / play · ♡ / ♥ subscribes · ☆ / ★ favorites
           </span>
         </div>
       </div>

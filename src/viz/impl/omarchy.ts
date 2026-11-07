@@ -55,7 +55,7 @@ const OMARCHY_NOISE = new Float32Array(OMARCHY_NOISE_SIZE * OMARCHY_NOISE_SIZE);
 
 // Bilinear sample of the noise field with smoothstep, wrapping at the edges,
 // so the texture drifts as blobs rather than loose pixels.
-function omarchyNoiseAt(u: number, v: number): number {
+export function omarchyNoiseAt(u: number, v: number): number {
   const size = OMARCHY_NOISE_SIZE;
   u -= Math.floor(u / size) * size;
   v -= Math.floor(v / size) * size;

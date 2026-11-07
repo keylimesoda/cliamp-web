@@ -1,8 +1,8 @@
 // cliamp-web service worker — app-shell caching only.
 // Audio streams and provider APIs are never cached (no-store).
-const CACHE = "cliamp-shell-v2";
+const CACHE = "cliamp-shell-v3";
 // Relative to the worker's own URL, so the app works at any base path.
-const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg"];
+const SHELL = ["./", "index.html", "manifest.webmanifest", "icon.svg", "worklets/wsola.js"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -14,7 +14,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("cliamp-shell-") && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

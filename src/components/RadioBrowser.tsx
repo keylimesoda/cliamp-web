@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { radioBrowse, type RadioCountry, type RadioTag } from "../providers/radio";
-import { usePlayerStore } from "../store/player";
+import { useEffect, useRef, useState } from "react";
+import { radioBrowse, RADIO_ORDER_LABELS, type RadioOrder, type RadioCountry, type RadioTag } from "../providers/radio";
+import { getEngine, usePlayerStore } from "../store/player";
 import { useRadioPrefs } from "../store/radioPrefs";
+import { useFavoritesStore } from "../store/favorites";
 import type { Track } from "../core/types";
 import { useAsync } from "./useAsync";
 
@@ -55,18 +56,64 @@ function Row({ label, hint, onClick }: { label: string; hint?: string; onClick?:
 /**
  * Radio source picker — built-in channels, station search, and the
  * Radio Browser directory (country + genre/tag browse). Tapping a station
- * loads it into the playback playlist and plays. Countries can be pinned
- * (persisted) for quick access; stations can be favorited.
+ * loads the displayed station results as the playback playlist and plays that
+ * station. Countries can be pinned (persisted) for quick access; stations can
+ * be favorited.
  */
 export default function RadioBrowser() {
   const playTrack = usePlayerStore((s) => s.playTrack);
   const prefs = useRadioPrefs();
+  const favorites = useFavoritesStore();
   const [view, setView] = useState<View>({ kind: "home" });
   const [query, setQuery] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
   const [countryName, setCountryName] = useState("");
+  const [order, setOrder] = useState<RadioOrder>("votes");
+  const [channelBusy, setChannelBusy] = useState<string | null>(null);
+  const [channelError, setChannelError] = useState<string | null>(null);
+  const channelRequest = useRef(0);
+  useEffect(() => () => { channelRequest.current++; }, []);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let active = true;
+    const refresh = () => { void radioBrowse.listenerCounts().then((c) => { if (active) setCounts(c); }).catch(() => {}); };
+    refresh();
+    const timer = window.setInterval(refresh, 300_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
-  const play = (t: Track) => {
-    void playTrack(t, 0);
+  const openChannel = async (channel: Track) => {
+    void getEngine()?.init().catch(() => {});
+    const request = ++channelRequest.current;
+    setChannelBusy(channel.path);
+    setChannelError(null);
+    try {
+      const tracks = await radioBrowse.channelTracks(channel);
+      if (request === channelRequest.current) await usePlayerStore.getState().loadPlaylist(tracks, 0, true);
+    } catch (e) {
+      if (request === channelRequest.current) setChannelError(e instanceof Error ? e.message : "Channel unavailable");
+    } finally { if (request === channelRequest.current) setChannelBusy(null); }
+  };
+
+  const play = (t: Track, results?: Track[]) => {
+    // A late song-channel request must not replace a newer station selection.
+    channelRequest.current++;
+    setChannelBusy(null);
+    setChannelError(null);
+    if (results) void usePlayerStore.getState().loadPlaylist(results, results.indexOf(t), true);
+    else void playTrack(t, 0);
+  };
+
+  const isStationFavorite = (t: Track) =>
+    favorites.tracks.some((x) => x.path === t.path) || prefs.isFavorite(t.path);
+
+  const toggleStationFavorite = (t: Track) => {
+    const savedTrack = favorites.tracks.some((x) => x.path === t.path);
+    const legacySaved = prefs.isFavorite(t.path);
+
+    if (savedTrack) favorites.toggle(t);
+    if (legacySaved) prefs.toggleFavorite(t.path);
+    if (!savedTrack && !legacySaved) favorites.toggle(t);
   };
 
   const builtinsKey = view.kind === "home" ? "builtins" : "";
@@ -80,17 +127,17 @@ export default function RadioBrowser() {
   );
   const countryStations = useAsync<Track[]>(
     () =>
-      view.kind === "country" ? radioBrowse.stationsForCountry(view.code) : Promise.resolve([]),
-    view.kind === "country" ? "country:" + view.code : "",
+      view.kind === "country" ? radioBrowse.stationsForCountry(view.code, order) : Promise.resolve([]),
+    view.kind === "country" ? "country:" + view.code + order : "",
   );
   const tags = useAsync<RadioTag[]>(
-    () => (view.kind === "tags" ? radioBrowse.listTags() : Promise.resolve([])),
-    view.kind === "tags" ? "tags" : "",
+    () => (view.kind === "tags" || view.kind === "tag" ? radioBrowse.listTags() : Promise.resolve([])),
+    view.kind === "tags" || view.kind === "tag" ? "tags" : "",
   );
   const tagStations = useAsync<Track[]>(
     () =>
-      view.kind === "tag" ? radioBrowse.stationsForTag(view.name) : Promise.resolve([]),
-    view.kind === "tag" ? "tag:" + view.name : "",
+      view.kind === "tag" ? radioBrowse.stationsForTag(view.name, order) : Promise.resolve([]),
+    view.kind === "tag" ? "tag:" + view.name + order : "",
   );
   const searchResults = useAsync<Track[]>(
     () =>
@@ -100,7 +147,11 @@ export default function RadioBrowser() {
     view.kind === "search" ? "search:" + view.query : "",
   );
 
-  const back = () => setView({ kind: "home" });
+  const back = () => {
+    if (view.kind === "tag") setView({ kind: "tags" });
+    else { setQuery(""); setView({ kind: "home" }); }
+  };
+  const filteredTags = (tags.data ?? []).filter((tag) => tag.name.toLowerCase().includes(tagQuery.trim().toLowerCase()));
 
   const search = (q: string) => {
     setQuery(q);
@@ -142,7 +193,7 @@ export default function RadioBrowser() {
       : [];
 
   return (
-    <div className="app">
+    <div className="app source-browser">
       <div className="app-titlebar">
         <button onClick={back} style={{ padding: 0 }} aria-label="Back" disabled={view.kind === "home"}>
           ◀
@@ -155,9 +206,10 @@ export default function RadioBrowser() {
 
       <input
         type="search"
-        value={query}
-        placeholder="Search stations…"
-        onChange={(e) => search(e.target.value)}
+        value={view.kind === "tags" ? tagQuery : query}
+        aria-label={view.kind === "tags" ? "Filter genres & tags" : "Search stations"}
+        placeholder={view.kind === "tags" ? "Filter genres & tags…" : "Search stations…"}
+        onChange={(e) => view.kind === "tags" ? setTagQuery(e.target.value) : search(e.target.value)}
         style={{
           width: "100%",
           minHeight: "var(--tap-min)",
@@ -171,7 +223,15 @@ export default function RadioBrowser() {
         }}
       />
 
+      {view.kind === "tags" && tags.error ? <div className="status-row is-error">ERR: {tags.error}</div> : null}
       {stationError ? <div className="status-row is-error">ERR: {stationError}</div> : null}
+      {channelError ? <div className="status-row is-error">ERR: {channelError}</div> : null}
+      {channelBusy ? <div className="status-row" role="status">Loading channel…</div> : null}
+      {(view.kind === "country" || view.kind === "tag") && (
+        <label>Order <select value={order} onChange={(e) => setOrder(e.target.value as RadioOrder)}>
+          {Object.entries(RADIO_ORDER_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select></label>
+      )}
 
       {view.kind === "home" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", flex: 1, minHeight: 0 }}>
@@ -185,17 +245,33 @@ export default function RadioBrowser() {
               <Row
                 label="Browse genres & tags"
                 hint={tags.data ? `${tags.data.length}` : undefined}
-                onClick={() => setView({ kind: "tags" })}
+                onClick={() => { setTagQuery(""); setView({ kind: "tags" }); }}
               />
             </div>
           </div>
-          <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0, display: "flex" }}>
-            <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+          <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+            <div className="list">
               {(builtins.data ?? []).map((t) => (
-                <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
+                <div className="row" key={t.path} onClick={() => {
+                  if (t.providerMeta?.trackCount && t.providerMeta?.tracksUrl) void openChannel(t);
+                  else play(t);
+                }} role="button" aria-label={t.title}>
                   <span className="marker" aria-hidden>♫</span>
                   <span className="title">{t.title}</span>
-                  <span className="dur">{t.genre ?? "LIVE"}</span>
+                  <span className="dur">{t.providerMeta?.trackCount && t.providerMeta?.tracksUrl ? `${t.providerMeta.trackCount} songs` : t.genre ?? "LIVE"}
+                    {counts[String(t.providerMeta?.builtin)] !== undefined ? ` · ${counts[String(t.providerMeta?.builtin)]} listening` : ""}
+                  </span>
+                  <span
+                    className={"radio-star" + (isStationFavorite(t) ? " is-fav" : "")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStationFavorite(t);
+                    }}
+                    role="button"
+                    aria-label={isStationFavorite(t) ? "Remove favorite" : "Favorite station"}
+                  >
+                    {isStationFavorite(t) ? "★" : "☆"}
+                  </span>
                 </div>
               ))}
               {builtins.busy ? <Row label="loading built-in channels…" /> : null}
@@ -206,8 +282,8 @@ export default function RadioBrowser() {
       )}
 
       {view.kind === "countries" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {countries.busy ? <Row label="loading countries…" /> : null}
             {orderedCountries.map((c) => (
               <div
@@ -220,19 +296,20 @@ export default function RadioBrowser() {
                 role="button"
                 aria-label={c.name}
               >
+                <span className="marker" aria-hidden>▸</span>
+                <span className="title">{c.name}</span>
+                <span className="dur">{c.stationcount}</span>
                 <span
-                  className={"marker" + (prefs.isPinned(c.code) ? " is-fav" : "")}
+                  className={"radio-star" + (prefs.isPinned(c.code) ? " is-fav" : "")}
                   onClick={(e) => {
                     e.stopPropagation();
                     prefs.togglePin(c.code);
                   }}
                   role="button"
-                  aria-label="Pin"
+                  aria-label={prefs.isPinned(c.code) ? "Unpin country" : "Pin country"}
                 >
-                  {prefs.isPinned(c.code) ? "★" : ""}
+                  {prefs.isPinned(c.code) ? "★" : "☆"}
                 </span>
-                <span className="title">{c.name}</span>
-                <span className="dur">{c.stationcount}</span>
               </div>
             ))}
           </div>
@@ -240,11 +317,12 @@ export default function RadioBrowser() {
       )}
 
       {view.kind === "tags" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {tags.busy ? <Row label="loading tags…" /> : null}
-            {(tags.data ?? []).slice(0, 300).map((t) => (
-              <div className="row" key={t.name} onClick={() => setView({ kind: "tag", name: t.name })} role="button" aria-label={t.name}>
+            {!tags.busy && tags.data && !filteredTags.length ? <Row label={tagQuery.trim() ? "no matching tags" : "no tags"} /> : null}
+            {filteredTags.map((t) => (
+              <div className="row" key={t.name} onClick={() => { setQuery(""); setView({ kind: "tag", name: t.name }); }} role="button" aria-label={t.name}>
                 <span className="marker" aria-hidden>#</span>
                 <span className="title">{t.name}</span>
                 <span className="dur">{t.stationcount}</span>
@@ -255,24 +333,25 @@ export default function RadioBrowser() {
       )}
 
       {(view.kind === "country" || view.kind === "tag" || view.kind === "search") && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
-          <div className="list" style={{ overflowY: "auto", flex: 1 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
+          <div className="list">
             {stationBusy ? <Row label="loading stations…" /> : null}
             {stationList.map((t) => (
-              <div className="row" key={t.path} onClick={() => play(t)} role="button" aria-label={t.title}>
-                <span
-                  className={"marker" + (prefs.isFavorite(t.path) ? " is-fav" : "")}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    prefs.toggleFavorite(t.path);
-                  }}
-                  role="button"
-                  aria-label="Favorite"
-                >
-                  {prefs.isFavorite(t.path) ? "★" : ""}
-                </span>
+              <div className="row" key={t.path} onClick={() => play(t, stationList)} role="button" aria-label={t.title}>
+                <span className="marker" aria-hidden>♫</span>
                 <span className="title">{t.title}</span>
                 <span className="dur">{(t.providerMeta?.countrycode as string) ?? t.genre ?? "LIVE"}</span>
+                <span
+                  className={"radio-star" + (isStationFavorite(t) ? " is-fav" : "")}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleStationFavorite(t);
+                  }}
+                  role="button"
+                  aria-label={isStationFavorite(t) ? "Remove favorite" : "Favorite station"}
+                >
+                  {isStationFavorite(t) ? "★" : "☆"}
+                </span>
               </div>
             ))}
             {!stationBusy && stationList.length === 0 ? (
@@ -285,7 +364,7 @@ export default function RadioBrowser() {
       <div className="footer">
         <div className="help-row">
           <span>
-            <span className="key-pill">tip</span> tap a station to play · ★ pins / favorites
+            <span className="key-pill">tip</span> tap a station to play · ☆ / ★ pins / favorites
           </span>
         </div>
       </div>

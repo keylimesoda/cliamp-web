@@ -113,8 +113,8 @@ registerProvider(radioProvider);
 export const radioBrowse = {
   /** Built-in cliamp channels (live streams). */
   async listBuiltins(): Promise<Track[]> {
-    const data = await getJson<{ stations: { id: string; name: string; description?: string; genre?: string; stream: string; tracks?: number }[] }>(BUILTIN);
-    return data.stations.map((s) => ({
+    const data = await getJson<{ stations: { id: string; name: string; description?: string; genre?: string; stream: string; tracks?: number; tracks_url?: string }[] }>(BUILTIN);
+    return data.stations.filter((s) => s.id && /^https?:\/\//.test(s.stream)).map((s) => ({
       path: s.stream,
       title: s.name,
       station: s.name,
@@ -122,8 +122,37 @@ export const radioBrowse = {
       stream: true,
       live: true,
       provider: "radio",
-      providerMeta: { builtin: s.id, description: s.description, trackCount: s.tracks },
+      providerMeta: { builtin: s.id, description: s.description, trackCount: s.tracks, tracksUrl: s.tracks_url },
     }));
+  },
+
+  /** Some cliamp channels expose seekable songs alongside the live stream. */
+  async channelTracks(channel: Track): Promise<Track[]> {
+    const url = channel.providerMeta?.tracksUrl;
+    if (typeof url !== "string" || !/^https?:\/\//.test(url) || !channel.providerMeta?.trackCount) return [channel];
+    const data = await getJson<{ tracks: { url: string; title: string; artist?: string; album?: string; duration?: number }[] }>(url);
+    const tracks = data.tracks.filter((s) => /^https?:\/\//.test(s.url)).map((s) => ({
+      path: s.url, title: s.title, artist: s.artist, album: s.album,
+      durationSecs: s.duration, provider: "radio", station: channel.title,
+      providerMeta: { builtin: channel.providerMeta?.builtin },
+    }));
+    if (!tracks.length) throw new Error("This channel has no songs");
+    return tracks;
+  },
+
+  async listenerCounts(): Promise<Record<string, number>> {
+    type Stats = { stations: Record<string, { active_listeners?: number }> };
+    const [live, songs] = await Promise.allSettled([
+      getJson<Stats>("https://radio.cliamp.stream/statistics"),
+      getJson<Stats>("https://radio.cliamp.stream/tracks/statistics"),
+    ]);
+    if (live.status === "rejected") throw live.reason;
+    const counts: Record<string, number> = {};
+    for (const result of [live, songs]) {
+      if (result.status !== "fulfilled") continue;
+      for (const [id, s] of Object.entries(result.value.stations)) counts[id] = (counts[id] ?? 0) + (s.active_listeners ?? 0);
+    }
+    return counts;
   },
 
   /** Directory countries (for country browse). */
@@ -153,7 +182,7 @@ export const radioBrowse = {
   /** Stations in a country/region, ordered. */
   async stationsForCountry(code: string, order: RadioOrder = "votes", limit = 200): Promise<Track[]> {
     const data = await getJson<ApiStation[]>(
-      `${API}/stations/search?${searchParams({ countrycode: code, order, limit })}`,
+      `${API}/stations/search?${searchParams({ countrycode: code, order, reverse: order === "name" ? "false" : "true", limit })}`,
     );
     return data.map(toTrack);
   },
@@ -161,7 +190,7 @@ export const radioBrowse = {
   /** Stations matching an exact tag, ordered. */
   async stationsForTag(tag: string, order: RadioOrder = "votes", limit = 200): Promise<Track[]> {
     const data = await getJson<ApiStation[]>(
-      `${API}/stations/search?${searchParams({ tag, tagExact: "true", order, limit })}`,
+      `${API}/stations/search?${searchParams({ tag, tagExact: "true", order, reverse: order === "name" ? "false" : "true", limit })}`,
     );
     return data.map(toTrack);
   },

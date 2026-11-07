@@ -11,7 +11,10 @@ const KEY = "cliamp-web:viz";
 function readIndex(): number {
   try {
     const raw = localStorage.getItem(KEY);
+    const named = VISUALIZERS.findIndex((v) => v.name === raw);
+    if (named >= 0) return named;
     const n = raw === null ? NaN : Number(raw);
+    if (n === 32) return VISUALIZERS.findIndex((v) => v.name === "None"); // v0.1's last index
     if (Number.isInteger(n) && n >= 0 && n < VISUALIZERS.length) return n;
   } catch {
     /* ignore */
@@ -20,7 +23,7 @@ function readIndex(): number {
 }
 function writeIndex(i: number): void {
   try {
-    localStorage.setItem(KEY, String(i));
+    localStorage.setItem(KEY, VISUALIZERS[i].name);
   } catch {
     /* ignore quota */
   }

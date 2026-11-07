@@ -1,0 +1,71 @@
+name: Deploy Tesla build to GitHub Pages
+
+on:
+  push:
+    branches:
+      - tesla-804x638-layout
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "vite.config.ts"
+      - ".github/workflows/deploy-tesla-preview.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cliamp-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out Tesla layout branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Stage production build
+        run: |
+          rm -rf /tmp/cliamp-dist
+          mkdir -p /tmp/cliamp-dist
+          cp -a dist/. /tmp/cliamp-dist/
+
+      - name: Publish gh-pages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages
+          git switch --force-create gh-pages origin/gh-pages
+          git rm -rf .
+          cp -a /tmp/cliamp-dist/. .
+          touch .nojekyll
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No deployment changes."
+            exit 0
+          fi
+          git commit -m "Deploy Tesla-optimized CLIamp build"
+          git push origin gh-pages
