@@ -227,7 +227,6 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
             className={"advanced-controls" + (showAdvanced ? " is-open" : "")}
           >
             <div className="advanced-header">
-              <span>Playback options</span>
               <button
                 className="advanced-close"
                 onClick={() => setShowAdvanced(false)}
@@ -235,6 +234,7 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
               >
                 Close
               </button>
+              <span>Playback options</span>
             </div>
             <EqControls />
             <div className="help-row">
