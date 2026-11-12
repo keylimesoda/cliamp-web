@@ -29,11 +29,29 @@ export interface Track {
   guid?: string;
   /** Provider id that owns this track. */
   provider?: string;
+  /** Spoken content uses independent listening progress. */
+  kind?: "podcast" | "audiobook";
   providerMeta?: Record<string, unknown>;
   /** Local playlist bookmark (star). */
   bookmark?: boolean;
   /** Cross-playlist favorite (heart). */
   favorite?: boolean;
+  /** Navidrome user rating, 0 (unrated) through 5. */
+  rating?: number;
+}
+
+/** Validate persisted track metadata before it reaches playback or React. */
+export function isTrack(value: unknown): value is Track {
+  if (!value || typeof value !== "object") return false;
+  const t = value as Record<string, unknown>;
+  if (typeof t.path !== "string" || !t.path || typeof t.title !== "string") return false;
+  if (!["artist", "album", "genre", "artUrl", "streamTitle", "station", "feed", "guid", "provider"]
+    .every((key) => t[key] === undefined || typeof t[key] === "string")) return false;
+  if (!["durationSecs", "year", "trackNumber", "rating"].every((key) => t[key] === undefined
+    || (typeof t[key] === "number" && Number.isFinite(t[key])))) return false;
+  if (!["stream", "live", "bookmark", "favorite"].every((key) => t[key] === undefined || typeof t[key] === "boolean")) return false;
+  return (t.kind === undefined || t.kind === "podcast" || t.kind === "audiobook")
+    && (t.providerMeta === undefined || (t.providerMeta !== null && typeof t.providerMeta === "object" && !Array.isArray(t.providerMeta)));
 }
 
 export type RepeatMode = "off" | "all" | "one";
@@ -63,6 +81,8 @@ export interface ResolvedSource {
   seekable?: boolean;
   /** Extra request headers (same-origin only; cross-origin ignored). */
   headers?: Record<string, string>;
+  /** Play on a standalone media element, bypassing Web Audio/CORS processing. */
+  direct?: boolean;
 }
 
 export type PlaybackState = "stopped" | "playing" | "paused" | "buffering" | "seeking";

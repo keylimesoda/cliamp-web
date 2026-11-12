@@ -29,7 +29,7 @@ function Row({ label, hint, onClick }: { label: string; hint?: string; onClick?:
  * Tapping a track plays it via the Subsonic stream URL.
  */
 export default function NavidromeBrowser() {
-  const playTrack = usePlayerStore((s) => s.playTrack);
+  const loadPlaylist = usePlayerStore((s) => s.loadPlaylist);
   const favorites = useFavoritesStore();
   const [view, setView] = useState<View>({ kind: "home" });
   const [query, setQuery] = useState("");
@@ -135,7 +135,7 @@ export default function NavidromeBrowser() {
           <div className="list" style={{ overflowY: "auto", flex: 1 }}>
             {busy ? <Row label="loading tracks…" /> : null}
             {tracks.map((t, i) => (
-              <div className="row" key={t.path + i} onClick={() => void playTrack(t, 0)} role="button" aria-label={t.title}>
+              <div className="row" key={t.path + i} onClick={() => void loadPlaylist(tracks, i)} role="button" aria-label={t.title}>
                 <span className="marker" aria-hidden>♫</span>
                 <span className="title">{t.title}</span>
                 <span className="dur">{t.durationSecs ? `${Math.floor(t.durationSecs / 60)}:${String(t.durationSecs % 60).padStart(2, "0")}` : ""}</span>

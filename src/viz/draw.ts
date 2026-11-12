@@ -19,6 +19,7 @@ function palette(c: VizColors): Record<string, string> {
     high: c.spectrumHigh,
     red: c.red,
     white: c.white,
+    accent: c.accent ?? c.spectrumLow,
   };
 }
 
@@ -46,17 +47,18 @@ export function drawFrame(canvas: HTMLCanvasElement, frame: VizFrame, data: VizD
   const offX = (w - cellW * cols) / 2;
   const offY = (h - cellH * rows) / 2;
 
-  ctx.font = `${Math.max(4, Math.floor(size))}px monospace`;
+  ctx.font = `${Math.max(4, Math.floor(size))}px "CLIAMP JetBrains Mono", "JetBrains Mono", monospace`;
   ctx.textBaseline = "top";
 
   for (let r = 0; r < rows; r++) {
     const line = frame.rows[r] ?? "";
     let run = "";
     let runColor: string | null = null;
-    const flush = (x: number) => {
+    let runStart = 0;
+    const flush = () => {
       if (runColor !== null && run.length > 0) {
         ctx.fillStyle = runColor;
-        ctx.fillText(run, x, 0);
+        ctx.fillText(run, offX + runStart * cellW, 0);
       }
       run = "";
       runColor = null;
@@ -66,7 +68,7 @@ export function drawFrame(canvas: HTMLCanvasElement, frame: VizFrame, data: VizD
     for (let c = 0; c < cols; c++) {
       const ch = c < line.length ? line[c] : " ";
       if (ch === " ") {
-        flush(offX + c * cellW);
+        flush();
         continue;
       }
       let color: string;
@@ -82,12 +84,13 @@ export function drawFrame(canvas: HTMLCanvasElement, frame: VizFrame, data: VizD
       if (color === runColor) {
         run += ch;
       } else {
-        flush(offX + c * cellW);
+        flush();
         run = ch;
+        runStart = c;
         runColor = color;
       }
     }
-    flush(offX + cols * cellW);
+    flush();
     ctx.restore();
   }
 }
