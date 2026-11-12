@@ -15,6 +15,8 @@ import "./providers/jellyfin"; // side-effect: registers jellyfin + emby
 import "./providers/plex"; // side-effect: registers plex
 import "./providers/audiobookshelf"; // side-effect: registers audiobookshelf
 import "./providers/lyrion"; // side-effect: registers lyrion (LMS)
+import "./providers/qobuz";
+import { qobuzTestEnabled } from "./providers/qobuzAuth";
 import { applyTheme } from "./themes/engine";
 
 type Screen = "now" | "radio" | "podcast" | "servers" | "favorites" | "settings";
@@ -56,7 +58,7 @@ export default function App() {
   const boot = usePlayerStore((s) => s.boot);
   const booted = usePlayerStore((s) => s.booted);
   const theme = usePlayerStore((s) => s.theme);
-  const [screen, setScreen] = useState<Screen>("now");
+  const [screen, setScreen] = useState<Screen>(() => qobuzTestEnabled() ? "servers" : "now");
   const [immersive, setImmersive] = useState(false);
   const [podcastTarget, setPodcastTarget] = useState<PodcastShow | null>(null);
 
