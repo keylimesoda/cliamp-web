@@ -31,6 +31,20 @@ normal navigation until a session has been validated.
 | ![Servers](docs/screenshots/servers.png) | ![Settings](docs/screenshots/v2.4.0/theme-picker-804x638.png) |
 | Self-hosted music servers | Theme picker and plugins |
 
+## Credentials and independent status
+
+cliamp-web is an independent, open-source browser music player. It is **not**
+an official sign-in page for Plex, Navidrome, Audiobookshelf, or Qobuz.
+Plex account linking uses the official `plex.tv/link` flow; other server
+credentials are entered for a media server chosen by the user. Server URL,
+password, and token configuration are stored in the browser's `localStorage`
+on that device (not encrypted by the app). Use a trusted device and servers
+you control or trust. Review the [source code](src/providers/) before
+entering credentials.
+
+See the [site-reputation diagnostics](docs/site-reputation.md) for how to
+verify any Google Safe Browsing warning before attempting remediation.
+
 ## Features
 
 - **Now Playing** — touch transport (prev / play-pause / next), seek bar,
