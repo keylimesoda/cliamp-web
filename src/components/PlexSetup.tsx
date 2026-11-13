@@ -55,7 +55,8 @@ export default function PlexSetup({ initial, onConnected, onCancel }: {
       <p>Listen to music from your home Plex server. Remote Access and a secure connection must be available from the car.</p>
       <p className="dim" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
         cliamp-web is an independent, open-source music player, not affiliated with Plex.
-        Account linking takes place on plex.tv. Connected server tokens are saved in this browser.
+        Account linking takes place on plex.tv. Connected server tokens are stored in this
+        device's browser localStorage, not on a cliamp-web server.
       </p>
       <button disabled={busy} onClick={() => { setManual(false); void link(); }}>{pin ? "Create a new code" : "Link Plex account"}</button>
       {pin && !manual && <div role="status">
