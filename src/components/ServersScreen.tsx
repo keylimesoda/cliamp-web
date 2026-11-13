@@ -60,8 +60,9 @@ export default function ServersScreen() {
             <h2 style={{ margin: 0, color: "var(--text-accent)" }}>Connect to {SERVER_CATALOG.find((s) => s.id === editing)?.name}</h2>
             <p className="dim" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
               cliamp-web is an independent, open-source music player, not an official sign-in page.
-              These details are used to connect to the server URL you choose and are saved in this browser.
-              Only enter credentials for a server you trust.{" "}
+              Your server URL and credentials are saved in this device's browser localStorage,
+              not on GitHub Pages or a cliamp-web server. Authentication goes directly from your
+              browser to the server you choose. Only enter credentials for a server you trust.{" "}
               <a href="https://github.com/keylimesoda/cliamp-web" target="_blank" rel="noreferrer">View source</a>.
             </p>
             <input
