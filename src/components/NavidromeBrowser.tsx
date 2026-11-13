@@ -7,10 +7,10 @@ import { useAsync } from "./useAsync";
 
 type View =
   | { kind: "home" }
-  | { kind: "albums" }
-  | { kind: "artist"; id: string; name: string }
-  | { kind: "album"; id: string; name: string }
-  | { kind: "search"; query: string };
+  | { kind: "albums"; parent: View }
+  | { kind: "artist"; id: string; name: string; parent: View }
+  | { kind: "album"; id: string; name: string; parent: View }
+  | { kind: "search"; query: string; parent: View };
 
 interface Album { id: string; name: string; artist: string; year?: number; }
 
@@ -28,7 +28,7 @@ function Row({ label, hint, onClick }: { label: string; hint?: string; onClick?:
  * Navidrome browser — artists → albums → tracks, global albums, and search.
  * Tapping a track plays it via the Subsonic stream URL.
  */
-export default function NavidromeBrowser() {
+export default function NavidromeBrowser({ onBack }: { onBack: () => void }) {
   const loadPlaylist = usePlayerStore((s) => s.loadPlaylist);
   const favorites = useFavoritesStore();
   const [view, setView] = useState<View>({ kind: "home" });
@@ -55,13 +55,16 @@ export default function NavidromeBrowser() {
     view.kind === "search" ? "srch:" + view.query : "",
   );
 
-  const back = () => setView({ kind: "home" });
+  const back = () => {
+    if (view.kind === "home") return onBack();
+    if (view.kind === "search") setQuery("");
+    setView(view.parent);
+  };
   const title =
-    view.kind === "home" ? "N A V I D R O M E"
-    : view.kind === "albums" ? "A L B U M S"
-    : view.kind === "artist" ? view.name
-    : view.kind === "album" ? view.name
-    : "S E A R C H";
+    view.kind === "home" ? "Navidrome"
+    : view.kind === "albums" ? "All albums"
+    : view.kind === "search" ? "Search"
+    : view.name;
   const crumb =
     view.kind === "home" ? "Library"
     : view.kind === "search" ? `“${view.query}”`
@@ -73,9 +76,9 @@ export default function NavidromeBrowser() {
   const err = view.kind === "album" ? albumTracks.error : view.kind === "search" ? search.error : null;
 
   return (
-    <div className="app">
+    <div className="app source-browser">
       <div className="app-titlebar">
-        <button onClick={back} style={{ padding: 0 }} aria-label="Back" disabled={view.kind === "home"}>◀</button>
+        <button onClick={back} aria-label="Back in Navidrome">Back</button>
         <h1 className="app-title">{title}</h1>
         <span className="screen-label">{crumb}</span>
       </div>
@@ -88,7 +91,8 @@ export default function NavidromeBrowser() {
           onChange={(e) => {
             const q = e.target.value;
             setQuery(q);
-            setView(q.trim() ? { kind: "search", query: q } : { kind: "home" });
+            const previous = view.kind === "search" ? view.parent : view;
+            setView(q.trim() ? { kind: "search", query: q, parent: previous } : previous);
           }}
           style={{ width: "100%", minHeight: "var(--tap-min)", padding: "0.5rem 0.8rem", fontFamily: "inherit", fontSize: "var(--fs-md)", color: "var(--text)", background: "var(--bg-sunken)", border: "1px solid var(--border)", borderRadius: "var(--radius)" }}
         />
@@ -97,11 +101,11 @@ export default function NavidromeBrowser() {
       {err ? <div className="status-row is-error">ERR: {err}</div> : null}
 
       {view.kind === "home" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
           <div className="list" style={{ overflowY: "auto", flex: 1 }}>
-            <Row label="All albums" onClick={() => setView({ kind: "albums" })} />
+            <Row label="All albums" onClick={() => setView({ kind: "albums", parent: view })} />
             {(artists.data ?? []).map((a) => (
-              <Row key={a.id} label={a.name} hint={`${a.albumCount} albums`} onClick={() => setView({ kind: "artist", id: a.id, name: a.name })} />
+              <Row key={a.id} label={a.name} hint={`${a.albumCount} albums`} onClick={() => setView({ kind: "artist", id: a.id, name: a.name, parent: view })} />
             ))}
             {artists.error ? <div className="status-row is-error">ERR: {artists.error}</div> : null}
           </div>
@@ -109,29 +113,29 @@ export default function NavidromeBrowser() {
       )}
 
       {view.kind === "albums" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
           <div className="list" style={{ overflowY: "auto", flex: 1 }}>
             {albums.busy ? <Row label="loading albums…" /> : null}
             {(albums.data ?? []).map((al) => (
-              <Row key={al.id} label={al.name} hint={al.artist} onClick={() => setView({ kind: "album", id: al.id, name: al.name })} />
+              <Row key={al.id} label={al.name} hint={al.artist} onClick={() => setView({ kind: "album", id: al.id, name: al.name, parent: view })} />
             ))}
           </div>
         </div>
       )}
 
       {view.kind === "artist" && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
           <div className="list" style={{ overflowY: "auto", flex: 1 }}>
             {artistAlbums.busy ? <Row label="loading albums…" /> : null}
             {(artistAlbums.data ?? []).map((al) => (
-              <Row key={al.id} label={al.name} hint={al.year ? String(al.year) : undefined} onClick={() => setView({ kind: "album", id: al.id, name: al.name })} />
+              <Row key={al.id} label={al.name} hint={al.year ? String(al.year) : undefined} onClick={() => setView({ kind: "album", id: al.id, name: al.name, parent: view })} />
             ))}
           </div>
         </div>
       )}
 
       {(view.kind === "album" || view.kind === "search") && (
-        <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
+        <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
           <div className="list" style={{ overflowY: "auto", flex: 1 }}>
             {busy ? <Row label="loading tracks…" /> : null}
             {tracks.map((t, i) => (
