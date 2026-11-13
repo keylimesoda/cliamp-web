@@ -58,6 +58,12 @@ export default function ServersScreen() {
         <div className="panel panel-accent" style={{ flex: 1, minHeight: 0 }}>
           <form onSubmit={(e) => { e.preventDefault(); void save(editing); }} style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", padding: "var(--pad)", overflowY: "auto", height: "100%" }}>
             <h2 style={{ margin: 0, color: "var(--text-accent)" }}>Connect to {SERVER_CATALOG.find((s) => s.id === editing)?.name}</h2>
+            <p className="dim" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
+              cliamp-web is an independent, open-source music player, not an official sign-in page.
+              These details are used to connect to the server URL you choose and are saved in this browser.
+              Only enter credentials for a server you trust.{" "}
+              <a href="https://github.com/keylimesoda/cliamp-web" target="_blank" rel="noreferrer">View source</a>.
+            </p>
             <input
               type="url"
               aria-label="Server URL"

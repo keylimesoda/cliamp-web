@@ -53,6 +53,10 @@ export default function PlexSetup({ initial, onConnected, onCancel }: {
     <div className="app-titlebar"><button onClick={onCancel}>Back</button><h1 className="app-title">Connect to Plex</h1></div>
     <div className="panel scroll-panel" style={{ overflowY: "auto", padding: "var(--pad)", display: "flex", flexDirection: "column", gap: "var(--gap)" }}>
       <p>Listen to music from your home Plex server. Remote Access and a secure connection must be available from the car.</p>
+      <p className="dim" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
+        cliamp-web is an independent, open-source music player, not affiliated with Plex.
+        Account linking takes place on plex.tv. Connected server tokens are saved in this browser.
+      </p>
       <button disabled={busy} onClick={() => { setManual(false); void link(); }}>{pin ? "Create a new code" : "Link Plex account"}</button>
       {pin && !manual && <div role="status">
         On your phone, open <a href={`https://plex.tv/link/?pin=${encodeURIComponent(pin.code)}`} target="_blank" rel="noreferrer">plex.tv/link</a> and enter:
