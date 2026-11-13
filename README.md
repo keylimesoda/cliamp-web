@@ -38,7 +38,9 @@ an official sign-in page for Plex, Navidrome, Audiobookshelf, or Qobuz.
 Plex account linking uses the official `plex.tv/link` flow; other server
 credentials are entered for a media server chosen by the user. Server URL,
 password, and token configuration are stored in the browser's `localStorage`
-on that device (not encrypted by the app). Use a trusted device and servers
+on that device (not encrypted by the app), **not** on GitHub Pages or a
+cliamp-web backend. The browser sends credentials to the chosen server or
+provider for authentication. Use a trusted device and servers
 you control or trust. Review the [source code](src/providers/) before
 entering credentials.
 
