@@ -1,4 +1,13 @@
 @font-face {
+  font-family: "CLIAMP FreeMono";
+  src: url("../assets/fonts/FreeMono.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+/* The canvas renderer explicitly loads FreeMono for Braille and block glyphs. */
+@font-face {
   font-family: "CLIAMP JetBrains Mono";
   src: url("../assets/fonts/JetBrainsMono-Regular.woff2") format("woff2");
   font-style: normal;

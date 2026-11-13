@@ -106,6 +106,11 @@ export default function Visualizer({ immersive = false, onOpenFull }: Visualizer
     if (!canvas) return;
     const entry = VISUALIZERS[index];
     if (!entry) return;
+    // Explicitly request the self-hosted canvas font. The animation redraws
+    // continuously, so it picks up the loaded font without a separate rerender.
+    if ("fonts" in document) {
+      void document.fonts.load('12px "CLIAMP FreeMono"', "⣿█").catch(() => {});
+    }
     const viz: Viz = entry.make();
     canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
     viz.init?.(grid.cols, grid.rows);

@@ -27,3 +27,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## GNU FreeMono (visualizer font)
+
+The published GitHub Pages build includes GNU FreeMono from Ubuntu's
+`fonts-freefont-ttf` package. Copyright 2002–2012 GNU FreeFont contributors.
+The font is distributed under GPL-3.0-or-later with the GNU FreeFont special
+font exception. The deployed build includes `FreeMono-LICENSE.txt` from the
+font package. Source: https://savannah.gnu.org/projects/freefont/ .
+The half-width Katakana glyphs in Matrix are not covered by FreeMono.

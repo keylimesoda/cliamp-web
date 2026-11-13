@@ -47,8 +47,19 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Bundle GNU FreeMono for canvas glyphs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y fonts-freefont-ttf
+          mkdir -p src/assets/fonts
+          cp /usr/share/fonts/truetype/freefont/FreeMono.ttf src/assets/fonts/FreeMono.ttf
+
       - name: Build production app
         run: npm run build
+
+      - name: Include FreeMono license notice
+        run: |
+          cp /usr/share/doc/fonts-freefont-ttf/copyright dist/FreeMono-LICENSE.txt
 
       - name: Include public Qobuz browser-test bootstrap
         if: inputs.qobuz_test == true
