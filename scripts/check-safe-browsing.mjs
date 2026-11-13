@@ -6,6 +6,7 @@
  *              2 = lookup could not complete (not a clean result).
  */
 import { appendFile } from "node:fs/promises";
+import { decodeSearchUrlsResponse } from "./safebrowsing-proto.mjs";
 
 const urls = [
   "https://keylimesoda.github.io/cliamp-web/",
@@ -32,18 +33,19 @@ if (!apiKey) {
     endpoint.searchParams.set("key", apiKey);
     for (const url of urls) endpoint.searchParams.append("urls", url);
     const response = await fetch(endpoint, {
-      headers: { Accept: "application/json", "User-Agent": "cliamp-web-reputation-monitor/1.0" },
+      headers: { Accept: "application/x-protobuf", "User-Agent": "cliamp-web-reputation-monitor/1.1" },
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new Error(`Safe Browsing API returned HTTP ${response.status}`);
-    const result = await response.json();
-    const threats = result.threats ?? [];
-    if (!Array.isArray(threats)) throw new Error("Unexpected API response: threats is not an array");
+    // Google v5 returns a binary Protocol Buffers message, not JSON.
+    // Invalid/missing fields fail closed rather than being called clean.
+    const result = decodeSearchUrlsResponse(await response.arrayBuffer());
+    const threats = result.threats;
 
     const report = [
       `### Google Safe Browsing URL lookup — ${timestamp}`,
       "",
-      "Checked the deployed app URL, its index.html, and the GitHub Pages account root:",
+      "Checked the deployed app URL, its index.html, and the GitHub Pages account root (Google Safe Browsing v5 binary API):",
       ...urls.map((url) => `- \`${url}\``),
       "",
       threats.length ? "**Threat matches returned:**" : "**No listed threats returned for these URLs.**",
