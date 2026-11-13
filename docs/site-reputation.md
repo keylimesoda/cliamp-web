@@ -21,7 +21,16 @@ The screenshot alone does not reveal Google's exact threat category.
    `urls:search` method. It logs a timestamp and threat types in its run
    summary; a threat match fails the job. It also runs daily on the default
    branch. An unavailable lookup is a separate failure, **not** a clean result.
-5. Save a screenshot from an affected Chrome profile with **Details** expanded,
+5. On a **Chrome profile that reproduces the warning**, open
+   `chrome://safe-browsing/` in a tab **before** navigating to the app
+   in a second tab. Look for the **URL lookup / real-time lookup** diagnostic
+   tab (the tab labels vary by Chrome release). Reproduce the warning, return
+   to the diagnostics tab, and inspect any matching URL request and threat
+   verdict. This is a client-side check, not guaranteed to log every
+   navigation: a local hash-list match or a cached verdict may not produce
+   a real-time lookup. Do not publicly share raw diagnostics without redacting
+   tokens and other private details.
+6. Save a screenshot from the affected Chrome profile with **Details** expanded,
    the exact URL, date/time, Chrome version, and whether Standard or Enhanced
    Protection is enabled. Compare with a fresh Chrome profile.
 
