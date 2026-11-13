@@ -2,6 +2,13 @@ name: Google Safe Browsing reputation
 
 on:
   workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "scripts/check-safe-browsing.mjs"
+      - "scripts/safebrowsing-proto.mjs"
+      - "scripts/safebrowsing-proto.test.mjs"
+      - ".github/workflows/safe-browsing.yml"
   schedule:
     - cron: "17 13 * * *"
 
@@ -16,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Test binary Safe Browsing decoder
+        run: node --test scripts/safebrowsing-proto.test.mjs
       - name: Check published URLs against Google Safe Browsing v5
         env:
           SAFE_BROWSING_API_KEY: ${{ secrets.SAFE_BROWSING_API_KEY }}
