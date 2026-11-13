@@ -347,6 +347,26 @@ select {
 .source-browser {
   overflow: hidden;
 }
+.source-browser .app-titlebar {
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.source-browser .app-titlebar .app-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.source-browser .app-titlebar .screen-label {
+  flex-shrink: 0;
+  max-width: 35%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .scroll-panel {
   flex: 1;
   min-height: 0;

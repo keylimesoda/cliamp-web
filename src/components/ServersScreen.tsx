@@ -22,7 +22,7 @@ export default function ServersScreen() {
   const [form, setForm] = useState<ServerConfig>({ url: "", user: "", password: "" });
 
   if (qobuzVisible) return <QobuzScreen onBack={() => setQobuzVisible(false)} />;
-  if (browse) return browse === "navidrome" ? <NavidromeBrowser /> : browse === "plex" ? <PlexBrowser onBack={() => setBrowse(null)} /> : <ServerBrowser id={browse} />;
+  if (browse) return browse === "navidrome" ? <NavidromeBrowser onBack={() => setBrowse(null)} /> : browse === "plex" ? <PlexBrowser onBack={() => setBrowse(null)} /> : <ServerBrowser id={browse} onBack={() => setBrowse(null)} />;
   if (editing === "plex") return <PlexSetup initial={servers.getConfig("plex")} onCancel={() => setEditing(null)} onConnected={(config) => {
     servers.saveConfig("plex", config); setEditing(null); setBrowse("plex");
   }} />;
@@ -47,17 +47,27 @@ export default function ServersScreen() {
     finally { setBusy(false); }
   };
 
+  const setupName = SERVER_CATALOG.find((server) => server.id === editing)?.name ?? "Server";
+
   return (
-    <div className="app">
+    <div className="app source-browser">
       <div className="app-titlebar">
-        <h1 className="app-title">S E R V E R S</h1>
-        <span className="screen-label">Self-hosted</span>
+        {editing ? (
+          <>
+            <button type="button" disabled={busy} onClick={() => setEditing(null)} aria-label={`Back from ${setupName} setup`}>Back</button>
+            <h1 className="app-title">Connect to {setupName}</h1>
+          </>
+        ) : (
+          <>
+            <h1 className="app-title">S E R V E R S</h1>
+            <span className="screen-label">Self-hosted</span>
+          </>
+        )}
       </div>
 
       {editing ? (
-        <div className="panel panel-accent" style={{ flex: 1, minHeight: 0 }}>
-          <form onSubmit={(e) => { e.preventDefault(); void save(editing); }} style={{ display: "flex", flexDirection: "column", gap: "var(--gap)", padding: "var(--pad)", overflowY: "auto", height: "100%" }}>
-            <h2 style={{ margin: 0, color: "var(--text-accent)" }}>Connect to {SERVER_CATALOG.find((s) => s.id === editing)?.name}</h2>
+        <div className="panel panel-accent scroll-panel">
+          <form onSubmit={(e) => { e.preventDefault(); void save(editing); }} style={{ display: "flex", flex: 1, minHeight: 0, flexDirection: "column", gap: "var(--gap)", padding: "var(--pad)", overflowY: "auto" }}>
             <p className="dim" style={{ fontSize: "var(--fs-xs)", margin: 0 }}>
               cliamp-web is an independent, open-source music player, not an official sign-in page.
               Your server URL and credentials are saved in this device's browser localStorage,

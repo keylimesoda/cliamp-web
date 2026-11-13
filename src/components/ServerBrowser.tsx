@@ -49,7 +49,7 @@ function embyTrack(id: ServerId, t: EmbyItem): Track {
  * Two (or three) levels: top items → tracks (ABS and Lyrion add a middle
  * level for authors/artists). Tapping a track plays it; ★ favorites it.
  */
-export default function ServerBrowser({ id }: { id: ServerId }) {
+export default function ServerBrowser({ id, onBack }: { id: ServerId; onBack: () => void }) {
   const loadPlaylist = usePlayerStore((s) => s.loadPlaylist);
   const progress = useListening((s) => s.entries);
   const favorites = useFavoritesStore();
@@ -118,15 +118,23 @@ export default function ServerBrowser({ id }: { id: ServerId }) {
   const busy = query ? results.busy : view.level === 0 ? tops.busy : view.level === 1 ? (isEmby || id === "plex" ? tracks.busy : mids.busy) : tracks.busy;
   const list = query ? results.data ?? [] : view.level === 0 ? tops.data ?? [] : view.level === 1 && (isEmby || id === "plex") ? tracks.data ?? [] : view.level === 1 ? mids.data ?? [] : tracks.data ?? [];
   const crumb = query ? `“${query}”` : view.level === 0 ? "Library" : view.level === 1 ? view.top.name : view.sub.name;
-  const canBack = view.level > 0;
-  const goBack = () => (view.level === 2 ? setView({ level: 1, top: view.top }) : setView({ level: 0 }));
+  const goBack = () => {
+    if (query) return setQuery("");
+    if (view.level === 0) return onBack();
+    setView(view.level === 2 ? { level: 1, top: view.top } : { level: 0 });
+  };
+  const serverName = id === "audiobookshelf" ? "Audiobookshelf"
+    : id === "jellyfin" ? "Jellyfin"
+    : id === "emby" ? "Emby"
+    : id === "plex" ? "Plex" : "Lyrion";
   const isTrack = query || (view.level === 1 && (isEmby || id === "plex")) || view.level === 2;
 
   if (!configured) {
     return (
-      <div className="app">
+      <div className="app source-browser">
         <div className="app-titlebar">
-          <h1 className="app-title">{id.toUpperCase()}</h1>
+          <button onClick={onBack} aria-label={`Back in ${serverName}`}>Back</button>
+          <h1 className="app-title">{serverName}</h1>
           <span className="screen-label">not configured</span>
         </div>
         <div className="panel" style={{ padding: "var(--pad)" }}>
@@ -137,13 +145,14 @@ export default function ServerBrowser({ id }: { id: ServerId }) {
   }
 
   return (
-    <div className="app">
+    <div className="app source-browser">
       <div className="app-titlebar">
-        <button onClick={goBack} style={{ padding: 0 }} aria-label="Back" disabled={!canBack}>◀</button>
-        <h1 className="app-title">{id.toUpperCase()}</h1>
-        <span className="screen-label">{crumb}</span>
+        <button onClick={goBack} aria-label={`Back in ${serverName}`}>Back</button>
+        <h1 className="app-title">{query.trim() ? "Search" : view.level === 0 ? serverName : crumb}</h1>
+        <span className="screen-label">{view.level === 0 ? "Library" : serverName}</span>
       </div>
       <input
+        aria-label={`Search ${serverName}`}
         type="search"
         value={query}
         placeholder="Search…"
@@ -155,7 +164,7 @@ export default function ServerBrowser({ id }: { id: ServerId }) {
         const latest = ts.map((t, i) => ({ i, p: findProgress(progress, t) })).filter((x) => x.p && !x.p.completed).sort((a, b) => b.p!.updatedAt - a.p!.updatedAt)[0];
         void loadPlaylist(ts, id === "audiobookshelf" ? latest?.i ?? 0 : 0);
       }}>{id === "audiobookshelf" ? "Resume book / play all" : "Play all"}</button>}
-      <div className="panel" style={{ padding: "0.4rem", flex: 1, minHeight: 0 }}>
+      <div className="panel scroll-panel" style={{ padding: "0.4rem" }}>
         <div className="list" style={{ overflowY: "auto", flex: 1 }}>
           {busy ? <Row label="loading…" /> : null}
           {!busy && list.length === 0 ? <Row label="empty" /> : null}
