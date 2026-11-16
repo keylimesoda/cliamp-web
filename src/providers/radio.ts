@@ -18,6 +18,9 @@ import { registerProvider } from "./registry";
 
 const API = "https://de1.api.radio-browser.info/json";
 const BUILTIN = "https://radio.cliamp.stream/stations";
+const FLASHBACK = "http://hd.matutos.com.br:8008/;stream.mp3";
+// The broadcaster's own player uses this HTTPS endpoint.
+const FLASHBACK_HTTPS = "https://stm1.matutos.com.br:8008/;";
 
 /** Directory ordering (recon §9: Most Voted / Listened / Trending / Name / Random). */
 export type RadioOrder = "votes" | "clickcount" | "clicktrend" | "name" | "random";
@@ -70,6 +73,7 @@ function toTrack(s: ApiStation): Track {
     provider: "radio",
     providerMeta: {
       uuid: s.stationuuid,
+      resolvedUrl: s.url_resolved,
       country: s.country,
       countrycode: s.countrycode,
       state: s.state,
@@ -103,7 +107,25 @@ export const radioProvider: Provider = {
   description: "Internet radio — built-in channels + Radio Browser directory",
   capabilities: { browse: true, search: true },
   async resolveSource(track: Track): Promise<ResolvedSource> {
-    // A radio station's path is the playable live stream URL itself.
+    // Use the directory's secure destination for HTTP redirects and playlists.
+    // Keep the listed path as the station identity for favorites and history.
+    const resolved = track.providerMeta?.resolvedUrl;
+    if (track.path === FLASHBACK) return { url: FLASHBACK_HTTPS, seekable: false };
+    if (/^http:\/\//i.test(track.path) && typeof resolved === "string") {
+      try {
+        const url = new URL(resolved);
+        if (url.username || url.password) return { url: track.path, seekable: false };
+        if (url.protocol === "https:") {
+          return { url: url.href, seekable: false };
+        }
+        // For old playlist and redirect links, try HTTPS at the actual audio
+        // endpoint. Upgrading the catalog URL alone can land on a playlist.
+        if (url.protocol === "http:" && url.href !== new URL(track.path).href) {
+          url.protocol = "https:";
+          return { url: url.href, seekable: false };
+        }
+      } catch { /* The directory can supply an empty or malformed URL. */ }
+    }
     return { url: track.path, seekable: false };
   },
 };

@@ -99,6 +99,14 @@ describe("audio engine regressions", () => {
     expect(onError).toHaveBeenCalledWith("Stream disconnected");
     expect(engine.snapshot().state).toBe("playing");
   });
+  it("treats a live stream ending as a connection failure", async () => {
+    const onError = vi.fn(); const onTrackEnd = vi.fn();
+    const engine = new AudioEngine({ onError, onTrackEnd });
+    await engine.load({ ...track("radio"), live: true, stream: true }, source("https://radio.test/live"));
+    FakeAudio.all[0].dispatchEvent(new Event("ended"));
+    expect(onError).toHaveBeenCalledWith("Live stream ended");
+    expect(onTrackEnd).not.toHaveBeenCalled();
+  });
   it("loads the worklet beneath the deployment subpath", async () => {
     const engine = new AudioEngine(); await engine.init();
     expect(Context.current.audioWorklet.addModule).toHaveBeenCalledWith("https://example.test/cliamp-web/worklets/wsola.js");
