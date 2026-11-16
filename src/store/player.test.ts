@@ -208,6 +208,16 @@ describe("custom EQ", () => {
 });
 
 describe("player transition guards", () => {
+  it("keeps recovery enabled when an initial stream load fails and pauses the engine", async () => {
+    const engine = mod.getEngine()!;
+    vi.spyOn(engine, "load").mockRejectedValueOnce(new Error("Stream disconnected"));
+    const radio = { path: "https://radio.fixture/live", title: "Radio", stream: true, live: true, provider: "radio" };
+    await mod.usePlayerStore.getState().playTrack(radio);
+    expect(mod.usePlayerStore.getState().recovery?.attempt).toBe(1);
+    expect(mod.usePlayerStore.getState().state).toBe("buffering");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mod.usePlayerStore.getState().state).toBe("playing");
+  });
   it("keeps recovery enabled when delayed audio initialization notifies an unchanged paused state", async () => {
     let initialized!: () => void;
     vi.spyOn(mod.getEngine()!, "init").mockImplementationOnce(() => new Promise((resolve) => { initialized = resolve; }));
