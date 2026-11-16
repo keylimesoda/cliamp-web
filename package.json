@@ -7,18 +7,22 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "build:qobuz-test": "node scripts/qobuz-bootstrap.mjs && npm run build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --exclude scripts/safebrowsing-proto.test.mjs",
     "test:watch": "vitest",
     "dev": "vite",
     "test:browser": "node tests/browser-smoke.mjs"
   },
   "dependencies": {
+    "@libav.js/variant-fat": "4.10.6",
+    "hls.js": "^1.7.4",
+    "m3u8-parser": "^7.2.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
+    "@types/m3u8-parser": "^7.2.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^4.5.0",

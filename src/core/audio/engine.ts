@@ -21,6 +21,14 @@ import { EQ_BANDS_HZ, EQ_Q, clampDb } from "../eq";
 import { bandLevels, FFT_SIZE, Spectrum } from "../spectrum";
 import { isSpokenTrack } from "../listening";
 import type { PlaybackState, ResolvedSource, Track } from "../types";
+import { HlsPlaylistError } from "./stream-error";
+import type { PcmOutput } from "./aac-stream";
+
+class HlsMediaError extends Error {}
+
+function mediaDecodeFailed(error: MediaError | null): boolean {
+  return error?.code === 3 || error?.code === 4;
+}
 
 export const VOLUME_MIN_DB = -50;
 export const VOLUME_MAX_DB = 6;
@@ -66,6 +74,9 @@ export class AudioEngine {
   private stereoOut: GainNode | null = null;
   private monoOut: GainNode | null = null;
   private loading = false;
+  private softwareStop: (() => void) | null = null;
+  private hlsStop: (() => void) | null = null;
+  private softwarePosition: (() => number) | null = null;
 
   private spectrum = new Spectrum();
   private bands = new Float32Array(10);
@@ -94,24 +105,42 @@ export class AudioEngine {
     this.element.preload = "auto";
     this.plainElement.preload = "auto";
     for (const el of [this.processedElement, this.plainElement]) {
-        const active = () => this.element === el && !this.gaplessSource;
-        el.addEventListener("playing", () => { if (active()) this.setState("playing"); });
+        const active = () => this.element === el && !this.gaplessSource && !this.softwareStop;
+        for (const event of ["loadstart", "playing", "pause", "waiting", "stalled", "ended", "error"]) {
+          el.addEventListener(event, () => {
+            try { if (localStorage.getItem("cliamp-web:audio-debug") !== "1") return; }
+            catch { return; }
+            console.debug("[audio]", { event, active: active(), generation: this.loadGeneration,
+              state: this.state, loading: this.loading, readyState: el.readyState,
+              networkState: el.networkState, currentTime: el.currentTime,
+              errorCode: el.error?.code, processed: el === this.processedElement });
+          });
+        }
+        el.addEventListener("playing", () => { if (active() && !el.paused) this.setState("playing"); });
         el.addEventListener("pause", () => {
-          if (!active() || this.loading || this.state === "stopped") return;
+          if (!active() || this.loading || this.state === "stopped" || el.ended) return;
           // A failed media resource can queue `pause` before `error`. Keep the
           // store from mistaking that browser-generated pause for user intent;
           // the error path should own the transition and start recovery.
           if (el.error) {
+            if (this.hlsStop && mediaDecodeFailed(el.error)) return;
             this.cb.onError?.(el.error.message || "playback error");
             return;
           }
           this.setState("paused");
         });
-        el.addEventListener("waiting", () => { if (active()) this.setState("buffering"); });
+        el.addEventListener("waiting", () => { if (active() && !el.paused) this.setState("buffering"); });
         el.addEventListener("seeking", () => { if (active()) this.setState("seeking"); });
         el.addEventListener("seeked", () => { if (active()) this.setState(el.paused ? "paused" : "playing"); });
-        el.addEventListener("ended", () => { if (active()) this.handleEnded(); });
+        el.addEventListener("ended", () => {
+          if (!active()) return;
+          if (this.track?.live || this.track?.stream) {
+            if (!this.loading && this.state !== "paused") this.cb.onError?.("Live stream ended");
+          }
+          else this.handleEnded();
+        });
         el.addEventListener("error", () => {
+          if (this.hlsStop && mediaDecodeFailed(el.error)) return;
           if (active() && !this.loading && el.error && this.state !== "stopped") this.cb.onError?.(el.error.message || "playback error");
         });
       }
@@ -200,6 +229,8 @@ export class AudioEngine {
   /** Load and play a track from a resolved source. */
   async load(track: Track, src: ResolvedSource, startAtSec = 0): Promise<void> {
     const generation = ++this.loadGeneration;
+    this.softwareStop?.();
+    this.hlsStop?.();
     // Podcast enclosures use the standalone element immediately: they do not
     // need a worklet or CORS permission and retain the initiating touch gesture.
     if (src.direct) {
@@ -269,11 +300,176 @@ export class AudioEngine {
       plain.playbackRate = this.speed;
       this.applyResume(plain, src, startAtSec);
       try { await plain.play(); }
-      catch (e) { if (generation === this.loadGeneration) { this.loading = false; throw e; } }
+      catch (e) {
+        if (generation !== this.loadGeneration) return;
+        try {
+          const url = new URL(src.url, document.baseURI);
+          if (track.provider !== "radio" || !track.live || url.username || url.password ||
+              (url.protocol !== "https:" && url.protocol !== "http:")) throw e;
+          if (e instanceof DOMException && (e.name === "NotAllowedError" || e.name === "AbortError")) throw e;
+          if (/\.m3u8$/i.test(url.pathname)) {
+            await this.playHls(url.href, generation);
+          } else {
+            if (!(e instanceof DOMException && e.name === "NotSupportedError")) throw e;
+            // A plain audio element can auto-upgrade HTTP media, but fetch()
+            // needs an explicit HTTPS URL to read bytes for the AAC decoder.
+            const httpFallback = url.protocol === "http:" ? url.href : undefined;
+            url.protocol = "https:";
+            try {
+              await this.playSoftwareAudio(async (signal, output) => {
+                const { decodeAacStream } = await import("./aac-stream");
+                await decodeAacStream(url.href, signal, output, httpFallback);
+              });
+            }
+            catch (error) {
+              if (!(error instanceof HlsPlaylistError) || generation !== this.loadGeneration) throw error;
+              await this.playHls(error.url, generation);
+            }
+          }
+        } finally {
+          if (generation === this.loadGeneration) this.loading = false;
+        }
+      }
     }
     if (generation !== this.loadGeneration) return;
     this.loading = false;
     this.notify();
+  }
+
+  private async playHls(source: string, generation: number): Promise<void> {
+    const url = new URL(source);
+    if (document.location.protocol === "https:" && url.protocol === "http:") url.protocol = "https:";
+    const playSoftware = () => this.playSoftwareAudio(async (signal, output) => {
+      const { decodeHlsAudio } = await import("./hls-software");
+      await decodeHlsAudio(url.href, signal, output);
+    });
+    try {
+      await this.playHlsMedia(url.href, generation, playSoftware);
+    } catch (error) {
+      if (generation !== this.loadGeneration || !(error instanceof HlsMediaError)) throw error;
+      await playSoftware();
+    }
+  }
+
+  private async playHlsMedia(source: string, generation: number, playSoftware: () => Promise<void>): Promise<void> {
+    const { default: Hls } = await import("hls.js");
+    if (generation !== this.loadGeneration) return;
+    if (!Hls.isSupported()) throw new HlsMediaError("Browser HLS unavailable");
+    for (const media of [this.processedElement, this.plainElement]) {
+      media.pause();
+      media.removeAttribute("src");
+      media.load();
+    }
+    const el = this.processedElement;
+    this.element = el;
+    el.crossOrigin = "anonymous";
+    this.setState("buffering");
+    const hls = new Hls();
+    await new Promise<void>((resolve, reject) => {
+      let started = false;
+      this.hlsStop = () => {
+        this.hlsStop = null;
+        el.removeEventListener("error", onMediaError);
+        hls.destroy();
+        if (!started) reject(new DOMException("Playback cancelled", "AbortError"));
+      };
+      const fail = (error: Error) => {
+        if (generation !== this.loadGeneration || !this.hlsStop) return;
+        if (!started) reject(error);
+        this.hlsStop();
+        if (!started) return;
+        if (error instanceof HlsMediaError) {
+          void playSoftware().catch((failure: unknown) => {
+            if (generation === this.loadGeneration) {
+              this.cb.onError?.(failure instanceof Error ? failure.message : "Stream unavailable");
+            }
+          });
+        } else {
+          this.cb.onError?.(error.message);
+        }
+      };
+      const onMediaError = () => {
+        if (mediaDecodeFailed(el.error)) fail(new HlsMediaError(el.error!.message));
+      };
+      el.addEventListener("error", onMediaError);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (!data.fatal) return;
+        const error = data.error ?? new Error("Stream unavailable");
+        fail(data.type === Hls.ErrorTypes.MEDIA_ERROR ? new HlsMediaError(error.message) : error);
+      });
+      hls.once(Hls.Events.MANIFEST_PARSED, () => {
+        void el.play().then(() => {
+          if (generation !== this.loadGeneration || !this.hlsStop) return;
+          started = true;
+          resolve();
+        }, (error: Error) => {
+          const unsupported = error.name === "NotSupportedError" || mediaDecodeFailed(el.error);
+          fail(unsupported ? new HlsMediaError(error.message) : error);
+        });
+      });
+      hls.once(Hls.Events.MEDIA_ATTACHED, () => hls.loadSource(source));
+      hls.attachMedia(el);
+    });
+  }
+
+  private async playSoftwareAudio(decode: (signal: AbortSignal, output: PcmOutput) => Promise<void>): Promise<void> {
+    const ctx = this.ctx!;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const scheduled = new Set<AudioBufferSourceNode>();
+    let next = 0;
+    let firstSampleAt = 0;
+    let started = false;
+    this.softwarePosition = () => Math.max(0, Math.min(ctx.currentTime, next) - firstSampleAt);
+    this.softwareStop = () => {
+      controller.abort();
+      for (const node of scheduled) { node.onended = null; node.stop(); node.disconnect(); }
+      scheduled.clear();
+      this.softwareStop = null;
+      this.softwarePosition = null;
+    };
+    for (const media of [this.processedElement, this.plainElement]) {
+      media.removeAttribute("src");
+      media.load();
+    }
+    this.element = this.processedElement;
+    this.setState("buffering");
+    await new Promise<void>((resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      void decode(signal, async (planes, rate) => {
+        while (next - ctx.currentTime > 0.75) {
+          signal.throwIfAborted();
+          await new Promise((done) => setTimeout(done, 50));
+        }
+        signal.throwIfAborted();
+        const buffer = ctx.createBuffer(planes.length, planes[0].length, rate);
+        planes.forEach((plane, channel) => buffer.getChannelData(channel).set(plane));
+        const node = ctx.createBufferSource();
+        node.buffer = buffer;
+        node.connect(this.graphInput!);
+        scheduled.add(node);
+        node.onended = () => {
+          scheduled.delete(node);
+          node.disconnect();
+          if (!scheduled.size && !signal.aborted) this.setState("buffering");
+        };
+        const at = Math.max(next, ctx.currentTime + (next > ctx.currentTime ? 0 : 0.12));
+        if (!started) firstSampleAt = at;
+        node.start(at);
+        next = at + buffer.duration;
+        this.setState("playing");
+        started = true;
+        resolve();
+      }).catch((error: unknown) => {
+        if (signal.aborted) return;
+        try {
+          if (localStorage.getItem("cliamp-web:audio-debug") === "1") console.debug("[audio] WASM failed", error);
+        } catch { /* Diagnostics are optional. */ }
+        if (!started) reject(error);
+        this.softwareStop?.();
+        if (started) this.cb.onError?.(error instanceof Error ? error.message : "Stream unavailable");
+      });
+    });
   }
 
   private applyResume(el: HTMLAudioElement, src: ResolvedSource, startAtSec: number): void {
@@ -305,6 +501,8 @@ export class AudioEngine {
   pause(): void {
     this.loadGeneration++;
     this.loading = false;
+    this.softwareStop?.();
+    this.hlsStop?.();
     if (this.gaplessSource && this.ctx) this.ctx.suspend();
     else this.element.pause();
     this.setState("paused");
@@ -527,6 +725,7 @@ export class AudioEngine {
 
   /** Current playback position in seconds (0 for unknown/live). */
   getPosition(): number {
+    if (this.softwarePosition) return this.softwarePosition();
     if (this.element === this.plainElement) {
       const position = this.element.currentTime;
       return Number.isFinite(position) ? position : 0;
@@ -541,6 +740,7 @@ export class AudioEngine {
 
   /** Duration in seconds (0 for unknown/live). */
   getDuration(): number {
+    if (this.softwareStop) return 0;
     if (this.gaplessSource) return this.gaplessSource.buffer?.duration ?? 0;
     const d = this.element.duration;
     return Number.isFinite(d) ? d : 0;

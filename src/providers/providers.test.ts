@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useServers } from "../store/servers";
 import { navidromeBrowse } from "./navidrome";
 import { plexBrowse } from "./plex";
-import { radioBrowse } from "./radio";
+import { radioBrowse, radioProvider } from "./radio";
 
 const mockFetch = vi.fn<typeof fetch>();
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } });
@@ -61,6 +61,18 @@ describe("Plex metadata", () => {
   });
 });
 describe("cliamp radio", () => {
+  it("uses a secure resolved endpoint without changing the station identity", async () => {
+    const path = "http://station.test/live.pls";
+    const resolvedUrl = "https://cdn.station.test/live";
+    mockFetch.mockResolvedValueOnce(json([{ name: "Station", url: path, url_resolved: resolvedUrl }]));
+    const [station] = await radioBrowse.searchStations("Station");
+    expect(station.path).toBe(path);
+    expect(await radioProvider.resolveSource(station)).toEqual({ url: resolvedUrl, seekable: false });
+    expect(await radioProvider.resolveSource({
+      ...station, providerMeta: { resolvedUrl: "http://cdn.station.test:8032/live" },
+    })).toEqual({ url: "https://cdn.station.test:8032/live", seekable: false });
+    expect(await radioProvider.resolveSource({ ...station, providerMeta: {} })).toEqual({ url: path, seekable: false });
+  });
   it("opens channels as finite songs when available, retaining live-only channels", async () => {
     mockFetch.mockResolvedValueOnce(json({ stations: [{ id: "omarchy", name: "Omarchy", stream: "https://radio.test/live", tracks: 2, tracks_url: "https://radio.test/tracks" }] }))
       .mockResolvedValueOnce(json({ tracks: [{ url: "https://radio.test/song", title: "Song", duration: 180 }, { url: "file:///bad", title: "Bad" }] }));

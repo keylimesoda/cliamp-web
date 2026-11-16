@@ -326,9 +326,15 @@ export default function NowPlaying({ immersive = false, onImmersiveChange, onOpe
 
       <div className="footer">
         {s.recovery ? (
-          <div className="recovery-controls" role="status"><span>{s.recovery.phase === "offline" ? "Waiting for connection…" : `Reconnecting ${s.recovery.attempt}/5…`}</span><button onClick={s.pause}>Pause</button></div>
+          <div className="recovery-controls" role="status"><span>{s.recovery.phase === "offline" ? "Offline" : "Reconnecting…"}</span><button onClick={s.pause}>Pause</button></div>
         ) : s.error ? (
-          <div className="recovery-controls"><span className="status-row is-error">{s.error}</span><button onClick={() => void s.retry()}>Retry</button></div>
+          <div className="recovery-controls">
+            <span className="status-row is-error" role="alert">{s.error}</span>
+            <button onClick={() => void s.retry()}>Retry</button>
+            {s.track?.live && s.track.provider === "radio" && /^http:\/\//i.test(s.track.path) && (
+              <a href={s.track.path} target="_blank" rel="noopener noreferrer">Open stream</a>
+            )}
+          </div>
         ) : (
           <div className="status-row">
             {s.track?.station ? `${s.track.station} · ` : ""}

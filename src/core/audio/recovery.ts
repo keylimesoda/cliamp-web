@@ -12,6 +12,7 @@ export class PlaybackRecovery {
   constructor(private callbacks: {
     reconnect: () => Promise<void>;
     online: () => boolean;
+    maxAttempts?: () => number;
     status: (status: RecoveryStatus | null) => void;
     exhausted: (reason: string) => void;
   }) {}
@@ -32,7 +33,7 @@ export class PlaybackRecovery {
       return;
     }
     if (this.timer !== null || this.busy) return;
-    if (this.attempts >= DELAYS.length) {
+    if (this.attempts >= (this.callbacks.maxAttempts?.() ?? DELAYS.length)) {
       this.enabled = false; this.callbacks.status(null); this.callbacks.exhausted(reason); return;
     }
     const epoch = this.epoch;

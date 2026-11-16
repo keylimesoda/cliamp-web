@@ -218,3 +218,13 @@ The audio engine (Web Audio + a worklet for time-stretch) is covered in
 Browser regression checks at a Tesla-sized touch viewport are documented in
 the [audit reproduction steps](docs/feature-parity-v2.4.0.md#reproducing-this-audits-checks).
 They use fictional data inside omabox; an actual Tesla has not been retested.
+
+### HTTP radio streams
+
+The player prefers HTTPS and can decode readable AAC+ streams in the browser.
+For a station that only serves HTTP, desktop Chrome offers a per-site
+**Insecure content** permission under **Site settings**. If you enable it for
+the player's origin and reload, the player can try the original HTTP stream.
+Software decoding still requires the station to permit cross-origin reads.
+The permission applies to the whole origin and HTTP audio is unencrypted.
+Browser support for this setting depends on the device.

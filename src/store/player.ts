@@ -37,6 +37,7 @@ import { useServers } from "./servers";
 import { useListening } from "./listening";
 import { findProgress, isSpokenTrack, listeningKey, resumePosition } from "../core/listening";
 import { PlaybackRecovery, type RecoveryStatus } from "../core/audio/recovery";
+import { UnsupportedStreamFormatError } from "../core/audio/stream-error";
 
 // ---- module singletons (not reactive) --------------------------------
 let engine: AudioEngine | null = null;
@@ -51,16 +52,27 @@ let lastPosition = 0;
 let lastAdvanceAt = Date.now();
 let stableSince = Date.now();
 let recoveryPosition = 0;
+let playbackStarted = false;
+
+function startingHttpRadio(track: Track | null): boolean {
+  return !playbackStarted && !!track?.live && track.provider === "radio" && /^http:\/\//i.test(track.path);
+}
+
+function stopWithPlaybackError(error: string): void {
+  wantsPlayback = false;
+  recovery.stop();
+  engine?.pause();
+  setState({ error, recovery: null, state: "paused" });
+}
 
 function online(): boolean { return typeof navigator === "undefined" || navigator.onLine !== false; }
 const recovery = new PlaybackRecovery({
   online,
   status: (status) => setState({ recovery: status, ...(status ? { state: "buffering" } : {}) }),
-  exhausted: (reason) => {
-    wantsPlayback = false;
-    engine?.pause();
-    setState({ error: `${reason}. Tap Retry to reconnect.`, recovery: null, state: "paused" });
-  },
+  maxAttempts: () => startingHttpRadio(usePlayerStore.getState().track) ? 1 : 5,
+  exhausted: () => stopWithPlaybackError(
+    startingHttpRadio(usePlayerStore.getState().track) ? "HTTPS unavailable" : "Playback unavailable",
+  ),
   reconnect: async () => {
     const track = usePlayerStore.getState().track;
     if (!track || !wantsPlayback) return;
@@ -74,8 +86,9 @@ const recovery = new PlaybackRecovery({
         const src = await resolveTrack(track);
         if (generation !== playGeneration || !wantsPlayback) return;
         await engine!.load(track, src, position);
-      })());
+      })(), startingHttpRadio(track) ? 8000 : undefined);
       if (generation !== playGeneration || !wantsPlayback) return;
+      playbackStarted = true;
       engine!.startTick();
       lastPosition = position; lastAdvanceAt = stableSince = Date.now();
       setState({ state: engine!.snapshot().state, error: null, position, seekable: engine!.isSeekable() });
@@ -83,17 +96,21 @@ const recovery = new PlaybackRecovery({
       void armNextGapless();
     } catch (e) {
       if (generation !== playGeneration || !wantsPlayback) return;
+      if (!playbackStarted && e instanceof UnsupportedStreamFormatError) {
+        stopWithPlaybackError(e.message);
+        return;
+      }
       engine!.pause();
       throw e;
     } finally { if (generation === playGeneration) transitioning = false; }
   },
 });
 
-async function deadline<T>(operation: Promise<T>): Promise<T> {
+async function deadline<T>(operation: Promise<T>, timeoutMs = 15000): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([operation, new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("Connection timed out")), 15000);
+      timer = setTimeout(() => reject(new Error("Connection timed out")), timeoutMs);
     })]);
   } finally { if (timer !== undefined) clearTimeout(timer); }
 }
@@ -332,18 +349,21 @@ function startPositionPolling(): void {
     if (pos !== s.position || dur !== s.duration) {
       setState({ position: pos, duration: dur, seekable: eng.isSeekable() });
     }
-    // Scrobble once a finite track passes 50% (cliamp parity).
     if (wantsPlayback && !transitioning && !s.recovery) {
       const now = Date.now();
       if (pos > lastPosition + 0.05 || pos < lastPosition - 1) {
         lastPosition = pos; recoveryPosition = pos; lastAdvanceAt = now;
         if (now - stableSince >= 10000) recovery.stable();
+      } else if ((s.track?.live || s.track?.stream) && s.state === "playing") {
+        // Some live media clocks sit still while the browser keeps playing.
+        lastAdvanceAt = now;
       } else if (now - lastAdvanceAt >= 12000) {
         connectionFailed("Playback stalled");
         lastAdvanceAt = now;
       }
     }
     const cur = s.track;
+    // Scrobble once a finite track passes 50% (cliamp parity).
     if (
       cur &&
       !scrobbled &&
@@ -389,11 +409,14 @@ async function armNextGapless(): Promise<void> {
 async function playSource(track: Track, src: ResolvedSource, startAtSec: number, generation: number): Promise<void> {
   const eng = engine!;
   try {
-    await deadline(eng.load(track, src, startAtSec));
+    await deadline(eng.load(track, src, startAtSec), startingHttpRadio(track) ? 8000 : undefined);
     eng.startTick();
   } catch (e) {
     if (generation !== playGeneration) return;
-    if (e instanceof DOMException && e.name === "NotAllowedError") {
+    if (e instanceof UnsupportedStreamFormatError) {
+      transitioning = false;
+      stopWithPlaybackError(e.message);
+    } else if (e instanceof DOMException && e.name === "NotAllowedError") {
       transitioning = false;
       wantsPlayback = false; recovery.stop(); setState({ error: "Tap Play to start audio", state: "paused" });
       eng.pause();
@@ -408,6 +431,7 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number,
     return;
   }
   if (generation !== playGeneration) return;
+  playbackStarted = true;
   transitioning = false;
   lastPosition = recoveryPosition = startAtSec;
   lastAdvanceAt = stableSince = Date.now();
@@ -597,6 +621,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   async playTrack(track, startAtSec) {
     saveProgress();
     wantsPlayback = true;
+    playbackStarted = false;
     recovery.start();
     transitioning = true;
     const generation = ++playGeneration;
@@ -628,6 +653,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
   async play() {
     const st = get();
     if (!st.booted) await st.boot();
+    if (st.track?.provider === "radio" && (st.error || st.track.live)) { await get().retry(); return; }
     const eng = engine!;
     wantsPlayback = true;
     recovery.start();
@@ -658,6 +684,7 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     transitioning = false;
     ++playGeneration;
     engine?.pause();
+    set({ state: "paused" });
     persistSession();
   },
 
