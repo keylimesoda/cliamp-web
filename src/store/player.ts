@@ -393,11 +393,18 @@ async function playSource(track: Track, src: ResolvedSource, startAtSec: number,
     eng.startTick();
   } catch (e) {
     if (generation !== playGeneration) return;
-    transitioning = false;
-    eng.pause();
     if (e instanceof DOMException && e.name === "NotAllowedError") {
+      transitioning = false;
       wantsPlayback = false; recovery.stop(); setState({ error: "Tap Play to start audio", state: "paused" });
-    } else connectionFailed(e instanceof Error ? e.message : "Playback failed");
+      eng.pause();
+    } else {
+      // A failed load can emit `pause` synchronously. Keep it classified as
+      // part of this transition so it cannot cancel the recovery we are about
+      // to request below.
+      eng.pause();
+      transitioning = false;
+      connectionFailed(e instanceof Error ? e.message : "Playback failed");
+    }
     return;
   }
   if (generation !== playGeneration) return;
