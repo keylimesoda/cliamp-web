@@ -9,7 +9,7 @@ function deferred<T>() {
 class FakeAudio extends EventTarget {
   static all: FakeAudio[] = [];
   src = ""; crossOrigin = ""; preload = ""; currentTime = 0; duration = 10;
-  paused = true; readyState = 1; volume = 1; playbackRate = 1; error = null;
+  paused = true; readyState = 1; volume = 1; playbackRate = 1; error: { message: string } | null = null;
   defaultPlaybackRate = 1; preservesPitch = true;
   playResult: Promise<void> | null = null;
   constructor() { super(); FakeAudio.all.push(this); }
@@ -87,6 +87,17 @@ describe("audio engine regressions", () => {
     await engine.play(); expect(engine.snapshot().state).toBe("playing");
     FakeAudio.all[1].dispatchEvent(new Event("ended"));
     expect(onTrackEnd).toHaveBeenCalledWith(false);
+  });
+  it("reports a media failure instead of treating its pause event as user intent", async () => {
+    const onError = vi.fn();
+    const engine = new AudioEngine({ onError });
+    await engine.load(track("radio"), source("https://radio.test/live"));
+    const element = FakeAudio.all[0];
+    element.error = { message: "Stream disconnected" };
+    element.paused = true;
+    element.dispatchEvent(new Event("pause"));
+    expect(onError).toHaveBeenCalledWith("Stream disconnected");
+    expect(engine.snapshot().state).toBe("playing");
   });
   it("loads the worklet beneath the deployment subpath", async () => {
     const engine = new AudioEngine(); await engine.init();

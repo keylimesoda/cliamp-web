@@ -97,7 +97,15 @@ export class AudioEngine {
         const active = () => this.element === el && !this.gaplessSource;
         el.addEventListener("playing", () => { if (active()) this.setState("playing"); });
         el.addEventListener("pause", () => {
-          if (active() && !this.loading && this.state !== "stopped") this.setState("paused");
+          if (!active() || this.loading || this.state === "stopped") return;
+          // A failed media resource can queue `pause` before `error`. Keep the
+          // store from mistaking that browser-generated pause for user intent;
+          // the error path should own the transition and start recovery.
+          if (el.error) {
+            this.cb.onError?.(el.error.message || "playback error");
+            return;
+          }
+          this.setState("paused");
         });
         el.addEventListener("waiting", () => { if (active()) this.setState("buffering"); });
         el.addEventListener("seeking", () => { if (active()) this.setState("seeking"); });
